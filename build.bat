@@ -28,6 +28,23 @@ echo Creating release package...
 if exist release rmdir /s /q release
 mkdir release
 
+:: FFmpegのダウンロードと同梱
+echo.
+echo Downloading FFmpeg (this may take a while)...
+powershell -Command "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile 'ffmpeg.zip'"
+
+echo Extracting FFmpeg...
+powershell -Command "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path 'ffmpeg.zip' -DestinationPath 'ffmpeg_temp' -Force"
+
+echo Copying FFmpeg binaries...
+:: 解凍されたフォルダ構造に合わせてパスを調整（通常は ffmpeg-master-latest-win64-gpl/bin/ にある）
+xcopy /y "ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" release\
+xcopy /y "ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe" release\
+
+:: 一時ファイルの削除
+del ffmpeg.zip
+rmdir /s /q ffmpeg_temp
+
 :: ファイルのコピー
 copy dist\YtDlpApiServer.exe release\
 copy setup_exe.ps1 release\setup.ps1
@@ -39,7 +56,13 @@ mkdir release\downloads
 echo.
 echo ========================================================
 echo Build Complete!
-echo The installer package is located in the "release" folder.
+echo.
+echo The "release" folder now contains:
+echo  - YtDlpApiServer.exe (App)
+echo  - ffmpeg.exe / ffprobe.exe (Tools)
+echo  - setup.ps1 (Auto-start script)
+echo.
+echo You can zip and distribute the "release" folder.
 echo ========================================================
 echo.
 pause

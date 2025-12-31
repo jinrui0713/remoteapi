@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import yt_dlp
 import os
+import sys
 import uvicorn
 import logging
 
@@ -14,8 +15,22 @@ logging.basicConfig(
 
 app = FastAPI(title="yt-dlp API Server", version="1.0.0")
 
+# 実行環境のパスを取得（PyInstaller対応）
+if getattr(sys, 'frozen', False):
+    # exe化されている場合
+    application_path = os.path.dirname(sys.executable)
+else:
+    # 通常のPythonスクリプトの場合
+    application_path = os.path.dirname(os.path.abspath(__file__))
+
+# ffmpegが同梱されている場合、PATHに追加して認識させる
+ffmpeg_exe = os.path.join(application_path, "ffmpeg.exe")
+if os.path.exists(ffmpeg_exe):
+    logging.info(f"Found bundled ffmpeg at: {ffmpeg_exe}")
+    os.environ["PATH"] += os.pathsep + application_path
+
 # ダウンロード保存先ディレクトリ
-DOWNLOAD_DIR = "downloads"
+DOWNLOAD_DIR = os.path.join(application_path, "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 class DownloadRequest(BaseModel):
