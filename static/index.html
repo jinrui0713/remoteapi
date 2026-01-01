@@ -540,14 +540,31 @@
                 },
                 playVideo(file) {
                     this.currentVideoUrl = this.getFileUrl(file);
+                    console.log("Playing video:", this.currentVideoUrl);
+                    
                     if (!this.modalInstance) {
-                        this.modalInstance = new bootstrap.Modal(this.$refs.videoModal);
-                        this.$refs.videoModal.addEventListener('hidden.bs.modal', () => {
-                            this.$refs.videoPlayer.pause();
+                        const modalEl = this.$refs.videoModal;
+                        if (!modalEl) {
+                            console.error("Modal element not found!");
+                            return;
+                        }
+                        this.modalInstance = new bootstrap.Modal(modalEl);
+                        modalEl.addEventListener('hidden.bs.modal', () => {
+                            if (this.$refs.videoPlayer) {
+                                this.$refs.videoPlayer.pause();
+                                this.$refs.videoPlayer.currentTime = 0;
+                            }
                             this.currentVideoUrl = '';
                         });
                     }
                     this.modalInstance.show();
+                    
+                    // Auto-play
+                    this.$nextTick(() => {
+                        if (this.$refs.videoPlayer) {
+                            this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
+                        }
+                    });
                 }
             },
             mounted() {

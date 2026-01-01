@@ -51,8 +51,12 @@ else:
     bundle_dir = os.path.dirname(os.path.abspath(__file__))
     execution_dir = bundle_dir
 
-# ダウンロード保存先
-DOWNLOAD_DIR = os.path.join(execution_dir, "downloads")
+# ダウンロード保存先 (AppData)
+if os.name == 'nt':
+    DOWNLOAD_DIR = os.path.join(os.environ['LOCALAPPDATA'], 'YtDlpApiServer', 'downloads')
+else:
+    DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), ".YtDlpApiServer", "downloads")
+
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 # Mount downloads directory for static access (playback)
@@ -82,10 +86,6 @@ for path in ffmpeg_paths:
 
 if not ffmpeg_found:
     logging.warning("ffmpeg not found in bundled or execution directories. Relying on system PATH.")
-
-# ダウンロード保存先
-DOWNLOAD_DIR = os.path.join(execution_dir, "downloads")
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 # --- Job Management ---
 
@@ -166,6 +166,16 @@ def run_download(job_id: str, req: DownloadRequest):
     if os.path.exists(cookie_file):
         ydl_opts['cookiefile'] = cookie_file
         logging.info(f"Using cookies from {cookie_file}")
+
+    # Check if playlist and limit to 10
+    try:
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': 'in_playlist'}) as ydl_check:
+            info_check = ydl_check.extract_info(req.url, download=False)
+            if info_check and 'entries' in info_check:
+                logging.info(f"Playlist detected: {req.url}. Limiting to 10 items.")
+                ydl_opts['playlistend'] = 10
+    except Exception as e:
+        logging.warning(f"Failed to check playlist status: {e}")
 
     # Format selection
     if req.type == 'audio':
