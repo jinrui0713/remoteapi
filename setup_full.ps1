@@ -8,6 +8,9 @@ $ErrorActionPreference = "Stop"
 $ScriptPath = $PSScriptRoot
 Set-Location $ScriptPath
 
+# Enable TLS 1.2 (Required for GitHub and other modern sites)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 Write-Host "=== Starting Auto Setup Tool ===" -ForegroundColor Cyan
 
 # 1. Install Python dependencies
@@ -30,7 +33,7 @@ if (-not (Test-Path $FFmpegExe)) {
     $TempDir = Join-Path $ScriptPath "ffmpeg_temp"
     
     try {
-        Invoke-WebRequest -Uri $FFmpegUrl -OutFile $ZipPath
+        Invoke-WebRequest -Uri $FFmpegUrl -OutFile $ZipPath -UserAgent "Mozilla/5.0"
         
         Write-Host "Extracting ffmpeg..."
         Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
@@ -65,7 +68,7 @@ if (-not (Test-Path $CloudflaredExe)) {
     Write-Host "`n[3/5] Downloading cloudflared..."
     $CloudflaredUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
     try {
-        Invoke-WebRequest -Uri $CloudflaredUrl -OutFile $CloudflaredExe
+        Invoke-WebRequest -Uri $CloudflaredUrl -OutFile $CloudflaredExe -UserAgent "Mozilla/5.0"
         Write-Host "cloudflared setup complete." -ForegroundColor Green
     }
     catch {
