@@ -10,9 +10,16 @@ Windowsの起動時に自動的にバックグラウンドで開始するよう�
 
 ## 自動セットアップ（推奨）
 
-以下のスクリプトを実行すると、環境構築から公開設定までを全自動で行います。
+以下のスクリプトを実行すると、環境構築からサーバー起動、Cloudflare Tunnelの設定までを全自動で行います。
 
-1. PowerShellを**管理者権限**で開きます。
+### 事前準備（Cloudflare Tunnelを利用する場合）
+
+Cloudflare Zero Trustで発行されたトークンをお持ちの場合は、このフォルダにある `cloudflare_token.txt` にトークン（`eyJh...` で始まる文字列）を貼り付けて保存してください。
+これを行うと、セットアップ時に自動的にトンネルが接続され、外部公開設定が完了します。
+
+### 実行手順
+
+1. PowerShellを**管理者権限**で開きます（フォルダ内の何もないところをShift+右クリック -> 「PowerShell ウィンドウをここで開く」など）。
 2. 以下のコマンドを実行します。
 
 ```powershell
@@ -26,6 +33,12 @@ powershell -ExecutionPolicy Bypass -File .\setup_full.ps1
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup_full.ps1
 ```
+
+スクリプトが完了すると、以下の状態になります：
+- 必要なツール（ffmpeg, cloudflared）が `bin` フォルダにインストールされます。
+- APIサーバーがバックグラウンドで起動します。
+- （トークンがある場合）Cloudflare Tunnelがサービスとして起動し、外部からアクセス可能になります。
+- PC再起動時もこれらが自動的に立ち上がるよう設定されます。
 
 ## 手動インストール
 
@@ -124,26 +137,25 @@ def test_download(video_url):
 ## 高度な設定：Cloudflare Tunnel（独自ドメイン）
 
 Cloudflareのアカウントとドメインをお持ちの場合、固定ドメインで外部公開し、Windowsサービスとして常駐させることができます。
-これにより、PCを再起動しても自動的に接続が復帰し、常に同じURLでアクセス可能になります。
 
-### 手順
+### 自動設定（推奨）
+
+前述の通り、`cloudflare_token.txt` にトークンを保存してから `setup_full.ps1` を実行するのが最も簡単です。
+
+### 手動設定
+
+もし後から設定したい場合は、以下の手順で行えます。
 
 1.  **Cloudflare Zero Trustの設定**
-    *   [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) にアクセスします。
-    *   左メニューから `Networks` > `Tunnels` を選択し、`Create a tunnel` をクリックします。
-    *   Connectorとして `Cloudflared` を選択します。
-    *   OS選択画面で `Windows` を選択すると、インストールコマンドが表示されます。
-    *   そのコマンド内にある **トークン** （`eyJh...` で始まる長い文字列）だけをコピーして控えておきます。
+    *   [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) にアクセスし、Tunnelを作成してトークンを取得します。
 
 2.  **サービス化スクリプトの実行**
-    *   このフォルダにある `setup_cloudflared_service.ps1` を右クリックし、「PowerShellで実行」を選択するか、管理者権限のPowerShellから実行します。
-    *   「トークンを入力してください」と表示されたら、先ほどコピーしたトークンを貼り付けてEnterキーを押します。
+    *   `cloudflare_token.txt` にトークンを保存します。
+    *   `setup_cloudflared_service.ps1` を管理者権限で実行します。
+    *   自動的にトークンが読み込まれ、サービスとしてインストールされます。
 
 3.  **公開ホスト名の設定**
-    *   Cloudflareのダッシュボードに戻り、`Next` をクリックします。
-    *   `Public Hostname` タブで、公開したいドメイン（例: `api.yourdomain.com`）を設定します。
-    *   `Service` の設定で、Typeを `HTTP`、URLを `localhost:8000` に設定します。
-    *   `Save Tunnel` をクリックして完了です。
+    *   Cloudflareのダッシュボードで、`Public Hostname` を設定します（Service URL: `http://localhost:8000`）。
 
 これで、設定したドメイン経由でAPIサーバーにアクセスできるようになります。
 
