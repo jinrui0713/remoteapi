@@ -16,6 +16,9 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>Video Download Manager</h1>
             <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" @click="showServerModal">
+                    Servers ({{ servers.length }})
+                </button>
                 <button class="btn btn-outline-secondary" @click="$refs.cookieInput.click()" :disabled="uploadingCookies">
                     {{ uploadingCookies ? 'Uploading...' : 'Upload Cookies' }}
                 </button>
@@ -38,7 +41,16 @@
                     </div>
                     
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Target Server</label>
+                            <select class="form-select" v-model="form.targetServer">
+                                <option value="auto">Auto (Least Busy)</option>
+                                <option v-for="s in servers" :key="s.url" :value="s.url">
+                                    {{ s.name }} ({{ s.status }})
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Type</label>
                             <select class="form-select" v-model="form.type">
                                 <option value="video">Video + Audio</option>
@@ -46,7 +58,7 @@
                             </select>
                         </div>
                         
-                        <div class="col-md-4 mb-3" v-if="form.type === 'video'">
+                        <div class="col-md-3 mb-3" v-if="form.type === 'video'">
                             <label class="form-label">Quality</label>
                             <select class="form-select" v-model="form.quality">
                                 <option value="best">Best Available</option>
@@ -56,7 +68,7 @@
                             </select>
                         </div>
                         
-                        <div class="col-md-4 mb-3" v-if="form.type === 'audio'">
+                        <div class="col-md-3 mb-3" v-if="form.type === 'audio'">
                             <label class="form-label">Format</label>
                             <select class="form-select" v-model="form.audio_format">
                                 <option value="mp3">MP3</option>
@@ -75,9 +87,9 @@
         </div>
 
         <!-- Active Downloads -->
-        <div class="card shadow-sm">
+        <div class="card shadow-sm mb-4">
             <div class="card-header bg-white">
-                <h5 class="mb-0">Download Queue</h5>
+                <h5 class="mb-0">Active Jobs</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -85,18 +97,20 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width: 5%">ID</th>
-                                <th style="width: 30%">Title / URL</th>
+                                <th style="width: 10%">Server</th>
+                                <th style="width: 25%">Title / URL</th>
                                 <th style="width: 10%">Status</th>
-                                <th style="width: 25%">Progress</th>
+                                <th style="width: 20%">Progress</th>
                                 <th style="width: 10%">Info</th>
                                 <th style="width: 20%">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="job in jobs" :key="job.id">
+                            <tr v-for="job in jobs" :key="job.id + job.serverUrl">
                                 <td>{{ job.id.substring(0, 4) }}</td>
+                                <td><span class="badge bg-info text-dark">{{ getServerName(job.serverUrl) }}</span></td>
                                 <td>
-                                    <div class="fw-bold text-truncate" style="max-width: 300px;">{{ job.title || job.url }}</div>
+                                    <div class="fw-bold text-truncate" style="max-width: 250px;">{{ job.title || job.url }}</div>
                                     <small class="text-muted">{{ job.filename }}</small>
                                 </td>
                                 <td>
@@ -126,21 +140,8 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm action-btn-group">
-                                        <button v-if="job.status === 'finished'" 
-                                                class="btn btn-outline-primary" 
-                                                @click="playVideo(job.filename)" 
-                                                title="Play">
-                                            Play
-                                        </button>
-                                        <a v-if="job.status === 'finished'" 
-                                           class="btn btn-outline-success" 
-                                           :href="getDownloadUrl(job.filename)" 
-                                           download 
-                                           title="Download">
-                                            DL
-                                        </a>
                                         <button class="btn btn-outline-danger" 
-                                                @click="deleteJob(job.id)" 
+                                                @click="deleteJob(job)" 
                                                 title="Delete">
                                             {{ ['finished', 'error'].includes(job.status) ? 'Clear' : 'Cancel' }}
                                         </button>
@@ -148,6 +149,102 @@
                                 </td>
                             </tr>
                             <tr v-if="jobs.length === 0">
+                                <td colspan="7" class="text-center py-3 text-muted">No active jobs</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Downloaded Files Library -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Library (Downloaded Files)</h5>
+                <button class="btn btn-sm btn-outline-secondary" @click="fetchAllData">Refresh</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Server</th>
+                                <th>Filename</th>
+                                <th>Size</th>
+                                <th>Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="file in files" :key="file.serverUrl + file.filename">
+                                <td><span class="badge bg-light text-dark border">{{ getServerName(file.serverUrl) }}</span></td>
+                                <td>
+                                    <div class="text-break">{{ file.filename }}</div>
+                                </td>
+                                <td>{{ formatSize(file.size) }}</td>
+                                <td>{{ formatDate(file.created_at) }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" 
+                                                @click="playVideo(file)" 
+                                                title="Play">
+                                            Play
+                                        </button>
+                                        <a class="btn btn-outline-success" 
+                                           :href="getDownloadUrl(file)" 
+                                           download 
+                                           title="Download">
+                                            DL
+                                        </a>
+                                        <button class="btn btn-outline-danger" 
+                                                @click="deleteFile(file)" 
+                                                title="Delete">
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr v-if="files.length === 0">
+                                <td colspan="5" class="text-center py-3 text-muted">No files found</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Server Management Modal -->
+        <div class="modal fade" id="serverModal" tabindex="-1" ref="serverModal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Manage Servers</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Add Server URL</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" v-model="newServerUrl" placeholder="https://...">
+                                <button class="btn btn-primary" @click="addServer">Add</button>
+                            </div>
+                            <div class="form-text">Enter the root URL of the API server (e.g., https://api.example.com)</div>
+                        </div>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between align-items-center" v-for="(s, index) in servers" :key="s.url">
+                                <div>
+                                    <strong>{{ s.name }}</strong>
+                                    <div class="small text-muted">{{ s.url }}</div>
+                                    <span class="badge" :class="s.status === 'online' ? 'bg-success' : 'bg-danger'">{{ s.status }}</span>
+                                    <span class="badge bg-secondary ms-1" v-if="s.activeJobs !== undefined">{{ s.activeJobs }} jobs</span>
+                                </div>
+                                <button class="btn btn-sm btn-danger" @click="removeServer(index)" v-if="s.url !== '/'">Remove</button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
                                 <td colspan="6" class="text-center py-4 text-muted">No downloads yet</td>
                             </tr>
                         </tbody>
@@ -186,72 +283,281 @@
                         url: '',
                         type: 'video',
                         quality: 'best',
-                        audio_format: 'mp3'
+                        audio_format: 'mp3',
+                        targetServer: 'auto'
                     },
                     jobs: [],
+                    files: [],
+                    servers: [], // { url: string, name: string, status: string, activeJobs: number }
+                    newServerUrl: '',
                     loading: false,
                     updating: false,
                     uploadingCookies: false,
                     timer: null,
                     currentVideoUrl: '',
-                    modalInstance: null
+                    modalInstance: null,
+                    serverModalInstance: null
                 }
             },
             methods: {
-                async uploadCookies(event) {
-                    const file = event.target.files[0];
-                    if (!file) return;
+                // --- Server Management ---
+                loadServers() {
+                    const saved = localStorage.getItem('yt_dlp_servers');
+                    if (saved) {
+                        this.servers = JSON.parse(saved);
+                    } else {
+                        // Default local server
+                        this.servers = [{ url: '/', name: 'Local', status: 'unknown' }];
+                    }
+                },
+                saveServers() {
+                    localStorage.setItem('yt_dlp_servers', JSON.stringify(this.servers));
+                },
+                async addServer() {
+                    if (!this.newServerUrl) return;
+                    // Normalize URL
+                    let url = this.newServerUrl.trim();
+                    if (url.endsWith('/')) url = url.slice(0, -1);
                     
-                    this.uploadingCookies = true;
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    
+                    // Check duplicate
+                    if (this.servers.find(s => s.url === url)) {
+                        alert('Server already exists');
+                        return;
+                    }
+
+                    // Verify connection
                     try {
-                        const res = await axios.post('/system/cookies', formData, {
-                            headers: {
-                                'Content-Type': 'multipart/form-data'
-                            }
+                        const res = await axios.get(url === '/' ? '/system/info' : `${url}/system/info`);
+                        this.servers.push({
+                            url: url,
+                            name: res.data.hostname || 'Unknown',
+                            status: 'online',
+                            activeJobs: res.data.active_jobs
                         });
-                        alert(res.data.message);
-                    } catch (error) {
-                        alert('Cookie upload failed: ' + (error.response?.data?.detail || error.message));
-                    } finally {
-                        this.uploadingCookies = false;
-                        event.target.value = ''; // Reset input
+                        this.saveServers();
+                        this.newServerUrl = '';
+                        this.fetchAllData();
+                    } catch (e) {
+                        alert('Could not connect to server: ' + e.message);
                     }
                 },
-                async updateSystem() {
-                    if (!confirm('Are you sure you want to update the system? The server will restart.')) return;
-                    this.updating = true;
-                    try {
-                        const res = await axios.post('/system/update');
-                        alert(res.data.message);
-                    } catch (error) {
-                        alert('Update failed: ' + (error.response?.data?.detail || error.message));
-                        this.updating = false;
+                removeServer(index) {
+                    if (confirm('Remove this server?')) {
+                        this.servers.splice(index, 1);
+                        this.saveServers();
+                        this.fetchAllData();
                     }
                 },
+                showServerModal() {
+                    if (!this.serverModalInstance) {
+                        this.serverModalInstance = new bootstrap.Modal(this.$refs.serverModal);
+                    }
+                    this.serverModalInstance.show();
+                },
+                getServerName(url) {
+                    const s = this.servers.find(s => s.url === url);
+                    return s ? s.name : (url === '/' ? 'Local' : 'Remote');
+                },
+
+                // --- Data Fetching ---
+                async checkServerStatus() {
+                    for (const s of this.servers) {
+                        try {
+                            const endpoint = s.url === '/' ? '/system/info' : `${s.url}/system/info`;
+                            const res = await axios.get(endpoint, { timeout: 3000 });
+                            s.status = 'online';
+                            s.name = res.data.hostname; // Update hostname
+                            s.activeJobs = res.data.active_jobs;
+                        } catch (e) {
+                            s.status = 'offline';
+                            s.activeJobs = undefined;
+                        }
+                    }
+                    this.saveServers(); // Save updated names/status
+                },
+
+                async fetchAllData() {
+                    await this.checkServerStatus();
+                    
+                    // Fetch jobs and files from ALL online servers
+                    const jobPromises = [];
+                    const filePromises = [];
+
+                    for (const s of this.servers) {
+                        if (s.status !== 'online') continue;
+                        
+                        const baseUrl = s.url === '/' ? '' : s.url;
+                        
+                        jobPromises.push(
+                            axios.get(`${baseUrl}/jobs`)
+                                .then(res => res.data.map(j => ({ ...j, serverUrl: s.url })))
+                                .catch(() => [])
+                        );
+                        
+                        filePromises.push(
+                            axios.get(`${baseUrl}/files`)
+                                .then(res => res.data.map(f => ({ ...f, serverUrl: s.url })))
+                                .catch(() => [])
+                        );
+                    }
+
+                    const allJobs = (await Promise.all(jobPromises)).flat();
+                    // Sort by created_at desc
+                    this.jobs = allJobs.sort((a, b) => b.created_at - a.created_at);
+
+                    const allFiles = (await Promise.all(filePromises)).flat();
+                    this.files = allFiles.sort((a, b) => b.created_at - a.created_at);
+                },
+
+                // --- Actions ---
                 async startDownload() {
                     this.loading = true;
                     try {
-                        await axios.post('/download', this.form);
-                        this.form.url = ''; // Clear input
-                        this.fetchJobs();
+                        // Determine target server
+                        let targetUrl = this.form.targetServer;
+                        
+                        if (targetUrl === 'auto') {
+                            // Find online server with fewest active jobs
+                            const onlineServers = this.servers.filter(s => s.status === 'online');
+                            if (onlineServers.length === 0) throw new Error("No online servers available");
+                            
+                            // Sort by activeJobs asc
+                            onlineServers.sort((a, b) => (a.activeJobs || 0) - (b.activeJobs || 0));
+                            targetUrl = onlineServers[0].url;
+                        }
+
+                        const baseUrl = targetUrl === '/' ? '' : targetUrl;
+                        await axios.post(`${baseUrl}/download`, this.form);
+                        
+                        this.form.url = ''; 
+                        this.fetchAllData();
                     } catch (error) {
                         alert('Error starting download: ' + (error.response?.data?.detail || error.message));
                     } finally {
                         this.loading = false;
                     }
                 },
-                async fetchJobs() {
+
+                async deleteJob(job) {
                     try {
-                        const response = await axios.get('/jobs');
-                        // Sort by ID desc (newest first)
-                        this.jobs = response.data.sort((a, b) => b.created_at - a.created_at);
+                        const baseUrl = job.serverUrl === '/' ? '' : job.serverUrl;
+                        await axios.delete(`${baseUrl}/jobs/${job.id}`);
+                        this.fetchAllData();
                     } catch (error) {
-                        console.error('Error fetching jobs:', error);
+                        console.error('Error deleting job:', error);
                     }
                 },
+                async deleteFile(file) {
+                    if(!confirm('Delete ' + file.filename + ' from ' + this.getServerName(file.serverUrl) + '?')) return;
+                    try {
+                        const baseUrl = file.serverUrl === '/' ? '' : file.serverUrl;
+                        await axios.delete(`${baseUrl}/files/${encodeURIComponent(file.filename)}`);
+                        this.fetchAllData();
+                    } catch (error) {
+                        alert('Error deleting file: ' + (error.response?.data?.detail || error.message));
+                    }
+                },
+
+                // --- Utils ---
+                async uploadCookies(event) {
+                    // Upload to ALL servers? Or just local?
+                    // For now, let's upload to ALL online servers to keep them in sync
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    this.uploadingCookies = true;
+                    
+                    try {
+                        const promises = this.servers
+                            .filter(s => s.status === 'online')
+                            .map(s => {
+                                const formData = new FormData();
+                                formData.append('file', file); // Need new FormData for each request? No, but safer.
+                                const baseUrl = s.url === '/' ? '' : s.url;
+                                return axios.post(`${baseUrl}/system/cookies`, formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' }
+                                });
+                            });
+
+                        await Promise.all(promises);
+                        alert(`Cookies uploaded to ${promises.length} servers.`);
+                    } catch (error) {
+                        alert('Cookie upload failed on some servers.');
+                    } finally {
+                        this.uploadingCookies = false;
+                        event.target.value = '';
+                    }
+                },
+                async updateSystem() {
+                    if (!confirm('Update ALL connected servers?')) return;
+                    this.updating = true;
+                    try {
+                        const promises = this.servers
+                            .filter(s => s.status === 'online')
+                            .map(s => {
+                                const baseUrl = s.url === '/' ? '' : s.url;
+                                return axios.post(`${baseUrl}/system/update`).catch(e => console.error(e));
+                            });
+                        await Promise.all(promises);
+                        alert('Update command sent to all servers.');
+                    } catch (error) {
+                        alert('Update failed');
+                    } finally {
+                        this.updating = false;
+                    }
+                },
+                
+                // ... (getStatusClass, formatSize, formatDate same as before) ...
+                
+                getStatusClass(status) {
+                    switch(status) {
+                        case 'queued': return 'bg-secondary';
+                        case 'downloading': return 'bg-primary';
+                        case 'finished': return 'bg-success';
+                        case 'error': return 'bg-danger';
+                        default: return 'bg-secondary';
+                    }
+                },
+                getFileUrl(file) {
+                    if (!file) return '#';
+                    const baseUrl = file.serverUrl === '/' ? '' : file.serverUrl;
+                    return `${baseUrl}/downloads/${encodeURIComponent(file.filename)}`;
+                },
+                getDownloadUrl(file) {
+                    if (!file) return '#';
+                    const baseUrl = file.serverUrl === '/' ? '' : file.serverUrl;
+                    return `${baseUrl}/api/download/${encodeURIComponent(file.filename)}`;
+                },
+                formatSize(bytes) {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+                formatDate(timestamp) {
+                    return new Date(timestamp * 1000).toLocaleString();
+                },
+                playVideo(file) {
+                    this.currentVideoUrl = this.getFileUrl(file);
+                    if (!this.modalInstance) {
+                        this.modalInstance = new bootstrap.Modal(this.$refs.videoModal);
+                        this.$refs.videoModal.addEventListener('hidden.bs.modal', () => {
+                            this.$refs.videoPlayer.pause();
+                            this.currentVideoUrl = '';
+                        });
+                    }
+                    this.modalInstance.show();
+                }
+            },
+            mounted() {
+                this.loadServers();
+                this.fetchAllData();
+                
+                this.timer = setInterval(() => {
+                    this.fetchAllData();
+                }, 2000); // Poll every 2s
+            },
                 async deleteJob(jobId) {
                     try {
                         await axios.delete(`/jobs/${jobId}`);

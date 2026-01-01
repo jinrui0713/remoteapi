@@ -1,0 +1,289 @@
+﻿**********************
+Windows PowerShell トランスクリプト開始
+開始時刻: 20260101235103
+ユーザー名: BUFFALO-01\Shogo
+RunAs ユーザー: BUFFALO-01\Shogo
+構成名: 
+コンピューター: BUFFALO-01 (Microsoft Windows NT 10.0.22631.0)
+ホスト アプリケーション: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+プロセス ID: 33580
+PSVersion: 5.1.22621.6133
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.6133
+BuildVersion: 10.0.22621.6133
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+トランスクリプトが開始されました。出力ファイル: update_log.txt
+=== Starting Update Process ===
+Date: 01/01/2026 23:51:03
+
+[1/4] Checking for updates...
+Checking GitHub for updates...
+
+From https://github.com/jinrui0713/remoteapi
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+[2/4] Stopping running services...
+Stopped YtDlpApiServer.
+Stopped cloudflared.
+
+[3/4] Rebuilding application...
+
+=== Setting up Python Environment ===
+Installing requirements...
+Requirement already satisfied: pip in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (25.3)
+Requirement already satisfied: fastapi in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (fr
+om -r requirements.txt (line 1)) (0.128.0)
+Requirement already satisfied: uvicorn in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (fr
+om -r requirements.txt (line 2)) (0.40.0)
+Requirement already satisfied: yt-dlp in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (fro
+m -r requirements.txt (line 3)) (2025.12.8)
+Requirement already satisfied: pyinstaller in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages
+ (from -r requirements.txt (line 4)) (6.17.0)
+Requirement already satisfied: python-multipart in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-pac
+kages (from -r requirements.txt (line 5)) (0.0.21)
+Requirement already satisfied: starlette<0.51.0,>=0.40.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib
+\site-packages (from fastapi->-r requirements.txt (line 1)) (0.50.0)
+Requirement already satisfied: pydantic>=2.7.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-pack
+ages (from fastapi->-r requirements.txt (line 1)) (2.12.5)
+Requirement already satisfied: typing-extensions>=4.8.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\
+site-packages (from fastapi->-r requirements.txt (line 1)) (4.15.0)
+Requirement already satisfied: annotated-doc>=0.0.2 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site
+-packages (from fastapi->-r requirements.txt (line 1)) (0.0.4)
+Requirement already satisfied: anyio<5,>=3.6.2 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-pack
+ages (from starlette<0.51.0,>=0.40.0->fastapi->-r requirements.txt (line 1)) (4.12.0)
+Requirement already satisfied: idna>=2.8 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (
+from anyio<5,>=3.6.2->starlette<0.51.0,>=0.40.0->fastapi->-r requirements.txt (line 1)) (3.11)
+Requirement already satisfied: click>=7.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages
+(from uvicorn->-r requirements.txt (line 2)) (8.3.1)
+Requirement already satisfied: h11>=0.8 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (f
+rom uvicorn->-r requirements.txt (line 2)) (0.16.0)
+Requirement already satisfied: altgraph in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (f
+rom pyinstaller->-r requirements.txt (line 4)) (0.17.5)
+Requirement already satisfied: packaging>=22.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-pack
+ages (from pyinstaller->-r requirements.txt (line 4)) (25.0)
+Requirement already satisfied: pefile>=2022.5.30 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-pa
+ckages (from pyinstaller->-r requirements.txt (line 4)) (2024.8.26)
+Requirement already satisfied: pyinstaller-hooks-contrib>=2025.9 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\
+venv\lib\site-packages (from pyinstaller->-r requirements.txt (line 4)) (2025.11)
+Requirement already satisfied: pywin32-ctypes>=0.2.1 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\sit
+e-packages (from pyinstaller->-r requirements.txt (line 4)) (0.2.3)
+Requirement already satisfied: setuptools>=42.0.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-p
+ackages (from pyinstaller->-r requirements.txt (line 4)) (80.9.0)
+Requirement already satisfied: colorama in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (f
+rom click>=7.0->uvicorn->-r requirements.txt (line 2)) (0.4.6)
+Requirement already satisfied: annotated-types>=0.6.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\si
+te-packages (from pydantic>=2.7.0->fastapi->-r requirements.txt (line 1)) (0.7.0)
+Requirement already satisfied: pydantic-core==2.41.5 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\sit
+e-packages (from pydantic>=2.7.0->fastapi->-r requirements.txt (line 1)) (2.41.5)
+Requirement already satisfied: typing-inspection>=0.4.2 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\
+site-packages (from pydantic>=2.7.0->fastapi->-r requirements.txt (line 1)) (0.4.2)
+
+=== Building Executable ===
+Building exe with PyInstaller...
+56 DEPRECATION: Running PyInstaller as admin is not necessary nor sensible. Run PyInstaller from a non-administrator ter
+minal. PyInstaller 7.0 will block this.
+187 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.11
+188 INFO: Python: 3.12.1
+217 INFO: Platform: Windows-11-10.0.22631-SP0
+217 INFO: Python environment: C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\venv
+220 INFO: wrote C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\YtDlpApiServer.spec
+223 INFO: Removing temporary files and cleaning cache in C:\Users\Shogo\AppData\Local\pyinstaller
+234 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Scripts\\pyinstaller.exe',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\python312.zip',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\DLLs',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\Lib',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi']
+794 INFO: checking Analysis
+794 INFO: Building Analysis because Analysis-00.toc is non existent
+794 INFO: Looking for Python shared library...
+794 INFO: Using Python shared library: C:\Users\Shogo\AppData\Local\Programs\Python\Python312\python312.dll
+796 INFO: Running Analysis Analysis-00.toc
+796 INFO: Target bytecode optimization level: 0
+797 INFO: Initializing module dependency graph...
+799 INFO: Initializing module graph hook caches...
+816 INFO: Analyzing modules for base_library.zip ...
+1924 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\rem
+oteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+2483 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remotea
+pi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+3857 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remote
+api\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+5414 INFO: Caching module dependency graph...
+5456 INFO: Analyzing C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\main.py
+5665 INFO: Processing standard module hook 'hook-pydantic.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remo
+teapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+6233 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\Shogo\\Documents\\vscode\
+\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+6235 INFO: SetuptoolsInfo: initializing cached setuptools info...
+10762 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\re
+moteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10930 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteap
+i\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11177 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remo
+teapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11686 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\rem
+oteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+12014 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\rem
+oteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+12039 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\re
+moteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+12908 INFO: Processing standard module hook 'hook-anyio.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remote
+api\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14594 INFO: Processing standard module hook 'hook-yt_dlp.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remot
+eapi\\venv\\Lib\\site-packages\\yt_dlp\\__pyinstaller'
+Adding imports: ['yt_dlp.compat._legacy', 'yt_dlp.compat._deprecated', 'yt_dlp.utils._legacy', 'yt_dlp.utils._deprecated
+', 'Cryptodome', 'mutagen', 'brotli', 'certifi', 'secretstorage', 'curl_cffi']
+14818 WARNING: collect_data_files - skipping data collection for module 'curl_cffi' as it is not a package.
+14819 WARNING: collect_data_files - skipping data collection for module 'yt_dlp_ejs' as it is not a package.
+15192 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\
+remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+15474 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remo
+teapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+23643 INFO: Processing standard module hook 'hook-uvicorn.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remo
+teapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+24706 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remo
+teapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25051 INFO: Processing module hooks (post-graph stage)...
+25391 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\
+\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25392 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+
+25401 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\r
+emoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25413 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remote
+api\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25446 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi
+\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25447 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.j
+araco'!
+25459 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\r
+emoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25460 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendo
+r.more_itertools'!
+25683 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remote
+api\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25835 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\Shogo\\Documents\\
+vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25838 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\Shogo\\Documents\\vsco
+de\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25846 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remote
+api\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+25848 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendo
+r.backports'!
+26013 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from 'C:\\Users\\Shogo\\Documents\\vscod
+e\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+26014 INFO: Setuptools: 'importlib_metadata' appears to be a setuptools-vendored copy - creating alias to 'setuptools._v
+endor.importlib_metadata'!
+26039 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from 'C:\\Users\\Shogo\\Docu
+ments\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+26041 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\
+remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+26043 INFO: Setuptools: 'zipp' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.zipp'!
+26778 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\
+\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+26780 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+
+27070 WARNING: Hidden import "tzdata" not found!
+27586 INFO: Performing binary vs. data reclassification (9 entries)
+27589 INFO: Looking for ctypes DLLs
+27719 INFO: Analyzing run-time hooks ...
+27730 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi
+\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+27734 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi
+\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+27737 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\r
+emoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+27740 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remote
+api\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+27768 INFO: Creating base_library.zip...
+27795 INFO: Looking for dynamic libraries
+29107 INFO: Extra DLL search directories (AddDllDirectory): []
+29107 INFO: Extra DLL search directories (PATH): []
+29535 INFO: Warnings written to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\warn-YtDlpApiSe
+rver.txt
+29725 INFO: Graph cross-reference written to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\xr
+ef-YtDlpApiServer.html
+29790 INFO: checking PYZ
+29790 INFO: Building PYZ because PYZ-00.toc is non existent
+29791 INFO: Building PYZ (ZlibArchive) C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\PYZ-00.p
+yz
+30898 INFO: Building PYZ (ZlibArchive) C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\PYZ-00.p
+yz completed successfully.
+30947 INFO: checking PKG
+30947 INFO: Building PKG because PKG-00.toc is non existent
+30948 INFO: Building PKG (CArchive) YtDlpApiServer.pkg
+33874 INFO: Building PKG (CArchive) YtDlpApiServer.pkg completed successfully.
+33878 INFO: Bootloader C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\venv\Lib\site-packages\PyInstaller\bootloader
+\Windows-64bit-intel\run.exe
+33879 INFO: checking EXE
+33880 INFO: Building EXE because EXE-00.toc is non existent
+33881 INFO: Building EXE from EXE-00.toc
+33884 INFO: Copying bootloader EXE to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\dist\YtDlpApiServer.exe
+33953 INFO: Copying icon to EXE
+34011 INFO: Copying 0 resources to EXE
+34011 INFO: Embedding manifest in EXE
+34069 INFO: Appending PKG archive to EXE
+34174 INFO: Fixing EXE headers
+36476 INFO: Building EXE from EXE-00.toc completed successfully.
+36479 INFO: Build complete! The results are available in: C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\dist
+Deploying exe to AppData...
+Deploying static files...
+Deploying cookies.txt...
+
+=== Setting up FFmpeg ===
+FFmpeg already exists in bin folder.
+
+=== Setting up Cloudflare Tunnel ===
+File already exists, skipping download: cloudflared.exe
+Token found. Configuring Cloudflare Tunnel service...
+
+>> 終了エラー(cloudflared.exe): "ユーザー設定変数 "ErrorActionPreference" または共通パラメーターが Stop に設定されているため、実行中のコマンドが停止しました。No help topic for 'stop'"
+2026-01-01T14:51:44Z INF Installing cloudflared Windows service
+cloudflared service is already installed at Cloudflared; if you are running a cloudflared tunnel, you can point it to mu
+ltiple origins, avoiding the need to run more than one cloudflared service in the same machine; otherwise if you are rea
+lly sure, you can do `cloudflared service uninstall` to clean up the existing service and then try again this command
+No help topic for 'start'
+Cloudflare Tunnel service installed and started.
+
+=== Setting up Server Auto-Start ===
+
+TaskPath                                       TaskName                          State
+--------                                       --------                          -----
+\                                              YtDlpApiServer                    Ready
+Server auto-start task registered.
+
+=== Setting up Firewall ===
+Firewall rule added for port 8000.
+
+=== Starting Server Now ===
+Starting server in background...
+Waiting for server to start...
+.
+ Success!
+Server is running on http://localhost:8000
+
+=== Setup Complete! ===
+1. Tools (FFmpeg, Cloudflared) are installed in: C:\Users\Shogo\AppData\Local\YtDlpApiServer\bin
+2. Cloudflare Tunnel is running as a service.
+3. API Server is running in background.
+4. Both will start automatically on reboot.
+
+Press any key to exit...
+
+[4/4] Restarting server...
+Server restarted successfully via Scheduled Task.
+
+=== Update Complete ===
+**********************
+Windows PowerShell トランスクリプト終了
+終了時刻: 20260101235308
+**********************

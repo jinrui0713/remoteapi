@@ -51,6 +51,13 @@ else:
     bundle_dir = os.path.dirname(os.path.abspath(__file__))
     execution_dir = bundle_dir
 
+# ダウンロード保存先
+DOWNLOAD_DIR = os.path.join(execution_dir, "downloads")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# Mount downloads directory for static access (playback)
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
 # ffmpeg設定
 ffmpeg_paths = [
     os.path.join(bundle_dir, "ffmpeg.exe"),
@@ -256,6 +263,13 @@ def run_download(job_id: str, req: DownloadRequest):
 async def index():
     return FileResponse(os.path.join("static", "index.html"))
 
+@app.get("/api/download/{filename}")
+async def download_file(filename: str):
+    file_path = os.path.join(DOWNLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, media_type='application/octet-stream', filename=filename)
+
 @app.post("/download")
 async def start_download(request: DownloadRequest):
     job_id = str(uuid.uuid4())
@@ -288,6 +302,37 @@ async def delete_job(job_id: str):
     if job_id in jobs:
         del jobs[job_id]
     return {"message": "Deleted"}
+
+@app.get("/files", response_model=List[Dict])
+async def list_files():
+    files = []
+    if os.path.exists(DOWNLOAD_DIR):
+        for f in os.listdir(DOWNLOAD_DIR):
+            fp = os.path.join(DOWNLOAD_DIR, f)
+            if os.path.isfile(fp):
+                try:
+                    stat = os.stat(fp)
+                    files.append({
+                        "filename": f,
+                        "size": stat.st_size,
+                        "created_at": stat.st_ctime
+                    })
+                except Exception:
+                    pass
+    # Sort by newest
+    files.sort(key=lambda x: x["created_at"], reverse=True)
+    return files
+
+@app.delete("/files/{filename}")
+async def delete_file(filename: str):
+    fp = os.path.join(DOWNLOAD_DIR, filename)
+    if os.path.exists(fp):
+        try:
+            os.remove(fp)
+            return {"message": "Deleted"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/debug/info")
 async def debug_info():
@@ -342,6 +387,17 @@ async def get_info(url: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/system/info")
+async def system_info():
+    """Get system status and load info"""
+    active_jobs = len([j for j in jobs.values() if j.status in [JobStatus.QUEUED, JobStatus.DOWNLOADING]])
+    return {
+        "hostname": socket.gethostname(),
+        "active_jobs": active_jobs,
+        "platform": sys.platform,
+        "version": app.version
+    }
+
 @app.post("/system/cookies")
 async def upload_cookies(file: UploadFile = File(...)):
     """Upload cookies.txt file"""
@@ -380,6 +436,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='YtDlp API Server')
+    parser.add_argument('--port', type=int, default=8000, help='Port to run the server on')
+    args = parser.parse_args()
+
     # Fix for PyInstaller --noconsole (sys.stdout/stderr are None)
     # Uvicorn needs valid streams for logging configuration
     if sys.stdout is None:
@@ -387,7 +449,7 @@ if __name__ == "__main__":
     if sys.stderr is None:
         sys.stderr = open(os.devnull, 'w')
 
-    logging.info("Starting uvicorn server...")
+    logging.info(f"Starting uvicorn server on port {args.port}...")
     
     # IP Display Logic
     try:
@@ -399,7 +461,7 @@ if __name__ == "__main__":
 
     try:
         # log_config=None prevents uvicorn from using its default config which fails without a console
-        uvicorn.run(app, host="0.0.0.0", port=8000, log_config=None)
+        uvicorn.run(app, host="0.0.0.0", port=args.port, log_config=None)
     except Exception as e:
         logging.critical(f"Failed to start uvicorn: {e}")
         print(f"CRITICAL ERROR: Failed to start uvicorn: {e}")

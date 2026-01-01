@@ -21,7 +21,7 @@ REM Build with PyInstaller
 REM --onefile: Bundle into a single exe
 REM --noconsole: Do not show console window (for background execution)
 REM --name: Output file name
-echo Running PyInstaller...
+echo Running PyInstaller for Server...
 pyinstaller --onefile --name YtDlpApiServer --clean main.py
 
 REM Create release package
@@ -33,11 +33,11 @@ REM Download and bundle FFmpeg
 echo.
 if exist "bin\ffmpeg.exe" (
     echo Found FFmpeg in bin folder. Copying...
-    mkdir ffmpeg_temp\bin
+    if not exist ffmpeg_temp\bin mkdir ffmpeg_temp\bin
     copy "bin\ffmpeg.exe" "ffmpeg_temp\bin\"
     copy "bin\ffprobe.exe" "ffmpeg_temp\bin\"
 ) else (
-    echo Downloading FFmpeg (this may take a while)...
+    echo Downloading FFmpeg...
     powershell -Command "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile 'ffmpeg.zip'"
 
     echo Extracting FFmpeg...
@@ -47,32 +47,36 @@ if exist "bin\ffmpeg.exe" (
     move ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin ffmpeg_temp\bin
 )
 
-echo Copying FFmpeg binaries...
-xcopy /y "ffmpeg_temp\bin\ffmpeg.exe" release\
-xcopy /y "ffmpeg_temp\bin\ffprobe.exe" release\
+echo Copying files to release staging...
+copy dist\YtDlpApiServer.exe release\
+copy "ffmpeg_temp\bin\ffmpeg.exe" release\
+copy "ffmpeg_temp\bin\ffprobe.exe" release\
+xcopy /E /I static release\static
 
-REM Remove temporary files
+REM Build Installer
+echo Building Installer...
+REM --add-data: Include files in the installer exe
+REM Format: source;dest
+pyinstaller --onefile --name Setup --clean --noconsole ^
+    --add-data "release\YtDlpApiServer.exe;." ^
+    --add-data "release\ffmpeg.exe;." ^
+    --add-data "release\ffprobe.exe;." ^
+    --add-data "release\static;static" ^
+    installer.py
+
+REM Cleanup
+copy dist\Setup.exe release\Setup.exe
 if exist ffmpeg.zip del ffmpeg.zip
 rmdir /s /q ffmpeg_temp
-
-REM Copy files
-copy dist\YtDlpApiServer.exe release\
-copy setup_exe.ps1 release\setup.ps1
-copy README.md release\README.txt
-
-:: downloadsフォルダの作成（空）
-mkdir release\downloads
 
 echo.
 echo ========================================================
 echo Build Complete!
 echo.
 echo The "release" folder now contains:
-echo  - YtDlpApiServer.exe (App)
-echo  - ffmpeg.exe / ffprobe.exe (Tools)
-echo  - setup.ps1 (Auto-start script)
+echo  - Setup.exe (Single-file Installer)
 echo.
-echo You can zip and distribute the "release" folder.
+echo Run Setup.exe to install the server.
 echo ========================================================
 echo.
 pause
