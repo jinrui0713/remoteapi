@@ -1,26 +1,32 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-import yt_dlp
 import os
 import sys
-import uvicorn
 import logging
-import socket
-import uuid
-import time
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional
 
-# ログ設定
+# Configure logging immediately to capture import errors
 logging.basicConfig(
     filename='server.log',
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+try:
+    from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+    from pydantic import BaseModel
+    import yt_dlp
+    import uvicorn
+    import socket
+    import uuid
+    import time
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    from typing import Dict, List, Optional
+except Exception as e:
+    logging.critical(f"Failed to import dependencies: {e}")
+    print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
+    sys.exit(1)
 
 app = FastAPI(title="yt-dlp API Server", version="2.0.0")
 

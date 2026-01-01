@@ -245,7 +245,13 @@ WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
             Write-Warning "server.log not found."
         }
         Write-Host "Trying to start visibly for debugging..."
-        Start-Process -FilePath $PythonPath -ArgumentList $MainScript
+        
+        # Run directly in current console to see output
+        try {
+            & $PythonPath $MainScript
+        } catch {
+            Write-Error "Failed to run python script: $_"
+        }
     }
 
 } else {
