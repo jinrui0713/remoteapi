@@ -103,9 +103,6 @@ try {
 } catch {
     Write-Error "An error occurred: $_"
 }
-} catch {
-    Write-Error "An error occurred: $_"
-}
 
 Write-Host "`nPress any key to exit..."
 Pause
