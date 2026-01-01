@@ -8,7 +8,26 @@ Windowsの起動時に自動的にバックグラウンドで開始するよう�
 - Windows 10/11
 - Python 3.8以上 (PATHに通っていること)
 
-## インストール
+## 自動セットアップ（推奨）
+
+以下のスクリプトを実行すると、環境構築から公開設定までを全自動で行います。
+
+1. PowerShellを**管理者権限**で開きます。
+2. 以下のコマンドを実行します。
+
+```powershell
+# スクリプトの実行ポリシーエラーが出る場合は、以下のコマンドで実行してください
+powershell -ExecutionPolicy Bypass -File .\setup_full.ps1
+```
+
+または、現在のセッションのみ実行を許可する場合：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\setup_full.ps1
+```
+
+## 手動インストール
 
 1. このリポジトリを適当なフォルダに配置します（例: `C:\Tools\remoteapi`）。
 2. コマンドプロンプトまたはPowerShellを開き、そのフォルダに移動します。
