@@ -215,13 +215,21 @@ async def get_info(url: str):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":
+    # Fix for PyInstaller --noconsole (sys.stdout/stderr are None)
+    # Uvicorn needs valid streams for logging configuration
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, 'w')
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, 'w')
+
     # IP Display Logic
     try:
         hostname = socket.gethostname()
         ip_list = socket.gethostbyname_ex(hostname)[2]
-        print(f"Available IP addresses: {ip_list}")
+        logging.info(f"Available IP addresses: {ip_list}")
     except:
         pass
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # log_config=None prevents uvicorn from using its default config which fails without a console
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_config=None)
 
