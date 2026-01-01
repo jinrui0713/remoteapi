@@ -13,7 +13,7 @@ logging.basicConfig(
 logging.info("Starting server initialization...")
 
 try:
-    from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
@@ -153,6 +153,12 @@ def run_download(job_id: str, req: DownloadRequest):
         'restrictfilenames': True, # Ensure filenames are safe (ASCII, no spaces)
         'windowsfilenames': True, # Force Windows-compatible filenames
     }
+
+    # Check for cookies.txt
+    cookie_file = os.path.join(execution_dir, "cookies.txt")
+    if os.path.exists(cookie_file):
+        ydl_opts['cookiefile'] = cookie_file
+        logging.info(f"Using cookies from {cookie_file}")
 
     # Format selection
     if req.type == 'audio':
@@ -318,6 +324,11 @@ async def download_file(filename: str):
 async def get_info(url: str):
     """Get video info (no download)"""
     ydl_opts = {'quiet': True, 'no_warnings': True}
+    
+    cookie_file = os.path.join(execution_dir, "cookies.txt")
+    if os.path.exists(cookie_file):
+        ydl_opts['cookiefile'] = cookie_file
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -330,6 +341,18 @@ async def get_info(url: str):
             }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/system/cookies")
+async def upload_cookies(file: UploadFile = File(...)):
+    """Upload cookies.txt file"""
+    try:
+        file_location = os.path.join(execution_dir, "cookies.txt")
+        with open(file_location, "wb+") as file_object:
+            file_object.write(await file.read())
+        return {"message": f"Cookies saved successfully."}
+    except Exception as e:
+        logging.error(f"Failed to save cookies: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save cookies: {str(e)}")
 
 import subprocess
 

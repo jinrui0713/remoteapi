@@ -15,10 +15,17 @@
     <div class="container py-5" id="app">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>Video Download Manager</h1>
-            <button class="btn btn-outline-secondary" @click="updateSystem" :disabled="updating">
-                <span v-if="updating" class="spinner-border spinner-border-sm me-2"></span>
-                {{ updating ? 'Updating...' : 'Check for Updates' }}
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @click="$refs.cookieInput.click()" :disabled="uploadingCookies">
+                    {{ uploadingCookies ? 'Uploading...' : 'Upload Cookies' }}
+                </button>
+                <input type="file" ref="cookieInput" class="d-none" accept=".txt" @change="uploadCookies">
+
+                <button class="btn btn-outline-secondary" @click="updateSystem" :disabled="updating">
+                    <span v-if="updating" class="spinner-border spinner-border-sm me-2"></span>
+                    {{ updating ? 'Updating...' : 'Check for Updates' }}
+                </button>
+            </div>
         </div>
         
         <!-- Download Form -->
@@ -184,12 +191,35 @@
                     jobs: [],
                     loading: false,
                     updating: false,
+                    uploadingCookies: false,
                     timer: null,
                     currentVideoUrl: '',
                     modalInstance: null
                 }
             },
             methods: {
+                async uploadCookies(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    this.uploadingCookies = true;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    try {
+                        const res = await axios.post('/system/cookies', formData, {
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        alert(res.data.message);
+                    } catch (error) {
+                        alert('Cookie upload failed: ' + (error.response?.data?.detail || error.message));
+                    } finally {
+                        this.uploadingCookies = false;
+                        event.target.value = ''; // Reset input
+                    }
+                },
                 async updateSystem() {
                     if (!confirm('Are you sure you want to update the system? The server will restart.')) return;
                     this.updating = true;
