@@ -144,6 +144,14 @@ if (Test-Path $StaticSrc) {
     Copy-Item -Path "$StaticSrc\*" -Destination $StaticDest -Recurse -Force
 }
 
+# Deploy cookies.txt if exists
+$CookieSrc = Join-Path $ScriptPath "cookies.txt"
+$CookieDest = Join-Path $AppDataDir "cookies.txt"
+if (Test-Path $CookieSrc) {
+    Write-Host "Deploying cookies.txt..."
+    Copy-Item -Path $CookieSrc -Destination $CookieDest -Force
+}
+
 # --- FFmpeg Setup ---
 Write-Host "`n=== Setting up FFmpeg ===" -ForegroundColor Cyan
 $FFmpegExe = Join-Path $BinDir "ffmpeg.exe"
