@@ -189,6 +189,19 @@ try {
     Write-Error "Failed to register server task: $_"
 }
 
+# --- Firewall Setup ---
+Write-Host "`n=== Setting up Firewall ===" -ForegroundColor Cyan
+$FirewallRuleName = "YtDlpApiServer"
+$Port = 8000
+
+try {
+    Remove-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound -LocalPort $Port -Protocol TCP -Action Allow -Profile Any | Out-Null
+    Write-Host "Firewall rule added for port $Port." -ForegroundColor Green
+} catch {
+    Write-Warning "Failed to set firewall rule: $_"
+}
+
 # --- Start Server Now ---
 Write-Host "`n=== Starting Server Now ===" -ForegroundColor Cyan
 # Check if already running
@@ -204,7 +217,37 @@ WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
     Invoke-Item $VbsFile
     Start-Sleep -Seconds 1
     Remove-Item $VbsFile
-    Write-Host "Server started." -ForegroundColor Green
+    
+    # Wait and check if port is listening
+    Write-Host "Waiting for server to start..." -NoNewline
+    $MaxRetries = 10
+    $Started = $false
+    for ($i = 0; $i -lt $MaxRetries; $i++) {
+        Start-Sleep -Seconds 1
+        $TcpConnection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        if ($TcpConnection) {
+            $Started = $true
+            break
+        }
+        Write-Host "." -NoNewline
+    }
+    
+    if ($Started) {
+        Write-Host " Success!" -ForegroundColor Green
+        Write-Host "Server is running on http://localhost:$Port"
+    } else {
+        Write-Host " Failed." -ForegroundColor Red
+        Write-Warning "Server failed to start or is taking too long."
+        Write-Warning "Checking server.log..."
+        if (Test-Path "server.log") {
+            Get-Content "server.log" -Tail 10
+        } else {
+            Write-Warning "server.log not found."
+        }
+        Write-Host "Trying to start visibly for debugging..."
+        Start-Process -FilePath $PythonPath -ArgumentList $MainScript
+    }
+
 } else {
     Write-Host "Server is already running." -ForegroundColor Yellow
 }
