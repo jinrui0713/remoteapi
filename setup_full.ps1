@@ -165,12 +165,13 @@ else {
 # 4. Build Application (exe)
 Write-Host "`n[4/5] Building application..."
 # Build with PyInstaller (include ffmpeg)
+# --noconsole: Hide the console window
 if (Test-Path $FFmpegExe) {
-    pyinstaller --onefile --name "YtDlpApiServer" --add-binary "ffmpeg.exe;." --clean "main.py"
+    pyinstaller --noconsole --onefile --name "YtDlpApiServer" --add-binary "ffmpeg.exe;." --add-data "static;static" --clean "main.py"
 }
 else {
     Write-Warning "ffmpeg.exe not found. Building without it."
-    pyinstaller --onefile --name "YtDlpApiServer" --clean "main.py"
+    pyinstaller --noconsole --onefile --name "YtDlpApiServer" --add-data "static;static" --clean "main.py"
 }
 
 # Move exe from dist to root
@@ -192,8 +193,10 @@ else {
     exit
 }
 
-# 5. Create Start Script
-Write-Host "`n[5/5] Creating start script..."
+# 5. Create Start Scripts
+Write-Host "`n[5/5] Creating start scripts..."
+
+# --- start_public.bat (Visible for debugging) ---
 $StartScript = @"
 @echo off
 cd /d "%~dp0"
@@ -212,11 +215,41 @@ pause
 "@
 Set-Content -Path "$ScriptPath\start_public.bat" -Value $StartScript
 
+# --- start_hidden.vbs (Completely Hidden) ---
+$HiddenScript = @"
+Set WshShell = CreateObject("WScript.Shell")
+' Run start_public.bat hidden (0)
+' Note: This will hide the cloudflared window too, so you won't see the URL.
+' Use this only if you have a fixed tunnel or just want local access.
+' For now, let's just run the server hidden and cloudflared visible if needed.
+' Actually, user asked for "completely background".
+' So we will run the server directly.
+WshShell.Run "YtDlpApiServer.exe", 0, False
+"@
+Set-Content -Path "$ScriptPath\start_server_hidden.vbs" -Value $HiddenScript
+
+# --- Register Scheduled Task for Auto-Start ---
+$TaskName = "YtDlpApiServer"
+$Action = New-ScheduledTaskAction -Execute "$ScriptPath\YtDlpApiServer.exe" -WorkingDirectory $ScriptPath
+$Trigger = New-ScheduledTaskTrigger -AtStartup
+$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -Hidden
+
+try {
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -TaskName $TaskName -Description "Runs yt-dlp API server automatically at startup." -Force
+    Write-Host "Auto-start task registered successfully." -ForegroundColor Green
+} catch {
+    Write-Warning "Failed to register auto-start task. You may need to run this script as Administrator."
+}
+
 Write-Host "`n=== Setup Complete! ===" -ForegroundColor Cyan
 Write-Host "The following files were created:"
-Write-Host "1. YtDlpApiServer.exe (Server)"
-Write-Host "2. cloudflared.exe (Tunnel Tool)"
-Write-Host "3. start_public.bat (Start Script)"
+Write-Host "1. YtDlpApiServer.exe (Server - No Console)"
+Write-Host "2. start_public.bat (Public Access - Visible)"
+Write-Host "3. start_server_hidden.vbs (Local Access - Hidden)"
 Write-Host "`n[Usage]"
-Write-Host "Double-click 'start_public.bat' to start the server and expose it to the internet."
-Write-Host "Look for the URL 'https://xxxx-xxxx.trycloudflare.com' in the black window."
+Write-Host "- To start publicly: Run 'start_public.bat'"
+Write-Host "- To start locally (hidden): Run 'start_server_hidden.vbs'"
+Write-Host "- Auto-start: The server is now scheduled to start automatically when Windows boots."
+

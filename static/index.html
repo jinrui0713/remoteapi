@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yt-Dlp Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .progress { height: 25px; }
+        .status-badge { width: 100px; }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-5" id="app">
+        <h1 class="mb-4">Video Download Manager</h1>
+        
+        <!-- Download Form -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-body">
+                <form @submit.prevent="startDownload">
+                    <div class="mb-3">
+                        <label class="form-label">Video URL</label>
+                        <input type="url" class="form-control" v-model="form.url" required placeholder="https://www.youtube.com/watch?v=...">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" v-model="form.type">
+                                <option value="video">Video + Audio</option>
+                                <option value="audio">Audio Only</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3" v-if="form.type === 'video'">
+                            <label class="form-label">Quality</label>
+                            <select class="form-select" v-model="form.quality">
+                                <option value="best">Best Available</option>
+                                <option value="1080">1080p</option>
+                                <option value="720">720p</option>
+                                <option value="480">480p</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3" v-if="form.type === 'audio'">
+                            <label class="form-label">Format</label>
+                            <select class="form-select" v-model="form.audio_format">
+                                <option value="mp3">MP3</option>
+                                <option value="m4a">M4A</option>
+                                <option value="wav">WAV</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" :disabled="loading">
+                        <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
+                        Start Download
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Active Downloads -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Download Queue</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%">ID</th>
+                                <th style="width: 30%">Title / URL</th>
+                                <th style="width: 10%">Status</th>
+                                <th style="width: 30%">Progress</th>
+                                <th style="width: 15%">Info</th>
+                                <th style="width: 10%">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="job in jobs" :key="job.id">
+                                <td>{{ job.id.substring(0, 4) }}</td>
+                                <td>
+                                    <div class="fw-bold text-truncate" style="max-width: 300px;">{{ job.title || job.url }}</div>
+                                    <small class="text-muted">{{ job.filename }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge status-badge" :class="getStatusClass(job.status)">
+                                        {{ job.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="progress" v-if="job.status === 'downloading'">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                             role="progressbar" 
+                                             :style="{ width: job.progress + '%' }">
+                                            {{ job.progress }}%
+                                        </div>
+                                    </div>
+                                    <div v-else-if="job.status === 'finished'" class="text-success">
+                                        Completed
+                                    </div>
+                                    <div v-else-if="job.status === 'error'" class="text-danger">
+                                        {{ job.error_msg }}
+                                    </div>
+                                    <div v-else class="text-muted">Waiting...</div>
+                                </td>
+                                <td>
+                                    <div v-if="job.speed"><small>Speed: {{ job.speed }}</small></div>
+                                    <div v-if="job.eta"><small>ETA: {{ job.eta }}</small></div>
+                                </td>
+                                <td>
+                                    <button v-if="['finished', 'error'].includes(job.status)" 
+                                            class="btn btn-sm btn-outline-danger" 
+                                            @click="deleteJob(job.id)">
+                                        Clear
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="jobs.length === 0">
+                                <td colspan="6" class="text-center py-4 text-muted">No downloads yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    form: {
+                        url: '',
+                        type: 'video',
+                        quality: 'best',
+                        audio_format: 'mp3'
+                    },
+                    jobs: [],
+                    loading: false,
+                    timer: null
+                }
+            },
+            methods: {
+                async startDownload() {
+                    this.loading = true;
+                    try {
+                        await axios.post('/download', this.form);
+                        this.form.url = ''; // Clear input
+                        this.fetchJobs();
+                    } catch (error) {
+                        alert('Error starting download: ' + (error.response?.data?.detail || error.message));
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async fetchJobs() {
+                    try {
+                        const response = await axios.get('/jobs');
+                        // Sort by ID desc (newest first)
+                        this.jobs = response.data.sort((a, b) => b.created_at - a.created_at);
+                    } catch (error) {
+                        console.error('Error fetching jobs:', error);
+                    }
+                },
+                async deleteJob(jobId) {
+                    try {
+                        await axios.delete(`/jobs/${jobId}`);
+                        this.fetchJobs();
+                    } catch (error) {
+                        console.error('Error deleting job:', error);
+                    }
+                },
+                getStatusClass(status) {
+                    switch(status) {
+                        case 'queued': return 'bg-secondary';
+                        case 'downloading': return 'bg-primary';
+                        case 'finished': return 'bg-success';
+                        case 'error': return 'bg-danger';
+                        default: return 'bg-secondary';
+                    }
+                }
+            },
+            mounted() {
+                this.fetchJobs();
+                // Poll every 1 second
+                this.timer = setInterval(this.fetchJobs, 1000);
+            },
+            beforeUnmount() {
+                if (this.timer) clearInterval(this.timer);
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
