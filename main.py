@@ -283,6 +283,37 @@ async def delete_job(job_id: str):
         del jobs[job_id]
     return {"message": "Deleted"}
 
+@app.get("/debug/info")
+async def debug_info():
+    """Diagnostic endpoint to check server state"""
+    files = []
+    if os.path.exists(DOWNLOAD_DIR):
+        try:
+            files = os.listdir(DOWNLOAD_DIR)
+        except Exception as e:
+            files = [f"Error listing files: {str(e)}"]
+    return {
+        "download_dir": DOWNLOAD_DIR,
+        "dir_exists": os.path.exists(DOWNLOAD_DIR),
+        "files": files,
+        "cwd": os.getcwd(),
+        "executable": sys.executable,
+        "ffmpeg_found": ffmpeg_found
+    }
+
+@app.get("/api/download/{filename}")
+async def download_file(filename: str):
+    """Direct download endpoint"""
+    # Security check
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    file_path = os.path.join(DOWNLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+    
+    return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
+
 @app.get("/info")
 async def get_info(url: str):
     """Get video info (no download)"""

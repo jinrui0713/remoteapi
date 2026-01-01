@@ -127,7 +127,7 @@
                                         </button>
                                         <a v-if="job.status === 'finished'" 
                                            class="btn btn-outline-success" 
-                                           :href="getFileUrl(job.filename)" 
+                                           :href="getDownloadUrl(job.filename)" 
                                            download 
                                            title="Download">
                                             DL
@@ -243,7 +243,12 @@
                     if (!filename) return '#';
                     return '/downloads/' + encodeURIComponent(filename);
                 },
+                getDownloadUrl(filename) {
+                    if (!filename) return '#';
+                    return '/api/download/' + encodeURIComponent(filename);
+                },
                 playVideo(filename) {
+                    // Use StaticFiles for playback (better range support)
                     this.currentVideoUrl = this.getFileUrl(filename);
                     if (!this.modalInstance) {
                         this.modalInstance = new bootstrap.Modal(this.$refs.videoModal);
