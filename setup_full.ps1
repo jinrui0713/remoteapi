@@ -6,15 +6,17 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 
 $ErrorActionPreference = "Stop"
 $ScriptPath = $PSScriptRoot
+Set-Location $ScriptPath
 
 Write-Host "=== 自動セットアップツールを開始します ===" -ForegroundColor Cyan
 
 # 1. Python依存関係のインストール
 Write-Host "`n[1/5] Pythonライブラリをインストール中..."
 try {
-    pip install -r "$ScriptPath\requirements.txt"
+    pip install -r "requirements.txt"
     pip install pyinstaller
-} catch {
+}
+catch {
     Write-Error "ライブラリのインストールに失敗しました。Pythonがインストールされているか確認してください。"
     exit
 }
@@ -25,25 +27,35 @@ if (-not (Test-Path $FFmpegExe)) {
     Write-Host "`n[2/5] ffmpegをダウンロード中..."
     $FFmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
     $ZipPath = Join-Path $ScriptPath "ffmpeg.zip"
+    $TempDir = Join-Path $ScriptPath "ffmpeg_temp"
     
     try {
         Invoke-WebRequest -Uri $FFmpegUrl -OutFile $ZipPath
         
         Write-Host "ffmpegを解凍中..."
-        Expand-Archive -Path $ZipPath -DestinationPath "$ScriptPath\ffmpeg_temp" -Force
+        Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
         
         # ffmpeg.exeを移動
-        $ExtractedPath = Get-ChildItem "$ScriptPath\ffmpeg_temp" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-        Move-Item $ExtractedPath.FullName -Destination $FFmpegExe -Force
+        $ExtractedPath = Get-ChildItem -Path $TempDir -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+        
+        if ($ExtractedPath) {
+            Move-Item -Path $ExtractedPath.FullName -Destination $FFmpegExe -Force
+        }
+        else {
+            throw "ffmpeg.exeが見つかりませんでした。"
+        }
         
         # 後始末
-        Remove-Item $ZipPath -Force
-        Remove-Item "$ScriptPath\ffmpeg_temp" -Recurse -Force
+        if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
+        if (Test-Path $TempDir) { Remove-Item $TempDir -Recurse -Force }
+        
         Write-Host "ffmpegのセットアップ完了" -ForegroundColor Green
-    } catch {
-        Write-Warning "ffmpegの自動ダウンロードに失敗しました。手動でffmpeg.exeを配置してください。"
     }
-} else {
+    catch {
+        Write-Warning "ffmpegの自動ダウンロードに失敗しました。手動でffmpeg.exeを配置してください。エラー: $_"
+    }
+}
+else {
     Write-Host "`n[2/5] ffmpegは既に存在します。スキップします。"
 }
 
@@ -55,32 +67,41 @@ if (-not (Test-Path $CloudflaredExe)) {
     try {
         Invoke-WebRequest -Uri $CloudflaredUrl -OutFile $CloudflaredExe
         Write-Host "cloudflaredのセットアップ完了" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Warning "cloudflaredのダウンロードに失敗しました。"
     }
-} else {
+}
+else {
     Write-Host "`n[3/5] cloudflaredは既に存在します。スキップします。"
 }
 
 # 4. アプリケーションのビルド (exe化)
 Write-Host "`n[4/5] アプリケーションをexe化しています..."
 # PyInstallerでビルド (ffmpegを含める)
-# --add-binary "src;dest" (Windowsではセミコロン区切り)
 if (Test-Path $FFmpegExe) {
-    pyinstaller --onefile --name "YtDlpApiServer" --add-binary "ffmpeg.exe;." --clean "$ScriptPath\main.py"
-} else {
+    pyinstaller --onefile --name "YtDlpApiServer" --add-binary "ffmpeg.exe;." --clean "main.py"
+}
+else {
     Write-Warning "ffmpeg.exeが見つからないため、同梱せずにビルドします。"
-    pyinstaller --onefile --name "YtDlpApiServer" --clean "$ScriptPath\main.py"
+    pyinstaller --onefile --name "YtDlpApiServer" --clean "main.py"
 }
 
 # distフォルダからexeをルートに移動
-if (Test-Path "$ScriptPath\dist\YtDlpApiServer.exe") {
-    Move-Item "$ScriptPath\dist\YtDlpApiServer.exe" "$ScriptPath\YtDlpApiServer.exe" -Force
-    Remove-Item "$ScriptPath\build" -Recurse -Force
-    Remove-Item "$ScriptPath\YtDlpApiServer.spec" -Force
-    if (Test-Path "$ScriptPath\dist") { Remove-Item "$ScriptPath\dist" -Recurse -Force }
+$DistExe = Join-Path $ScriptPath "dist\YtDlpApiServer.exe"
+$TargetExe = Join-Path $ScriptPath "YtDlpApiServer.exe"
+
+if (Test-Path $DistExe) {
+    Move-Item -Path $DistExe -Destination $TargetExe -Force
+    
+    # クリーンアップ
+    if (Test-Path "build") { Remove-Item "build" -Recurse -Force }
+    if (Test-Path "YtDlpApiServer.spec") { Remove-Item "YtDlpApiServer.spec" -Force }
+    if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
+    
     Write-Host "ビルド完了: YtDlpApiServer.exe" -ForegroundColor Green
-} else {
+}
+else {
     Write-Error "ビルドに失敗しました。"
     exit
 }
