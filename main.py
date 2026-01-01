@@ -234,6 +234,7 @@ async def update_system():
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 if __name__ == "__main__":
     # Fix for PyInstaller --noconsole (sys.stdout/stderr are None)
