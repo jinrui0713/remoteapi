@@ -58,20 +58,29 @@ try {
     Start-Process -FilePath $CloudflaredExe -ArgumentList "service install $Token" -Wait -NoNewWindow
     
     # --- Proxy Configuration ---
-    $Proxy = [System.Net.WebRequest]::DefaultWebProxy.GetProxy("https://www.google.com")
-    if ($Proxy -and $Proxy.AbsoluteUri -ne "https://www.google.com/") {
-        $ProxyUrl = $Proxy.AbsoluteUri
-        Write-Host "Detected Proxy: $ProxyUrl" -ForegroundColor Yellow
-        Write-Host "Configuring Cloudflared service to use this proxy..."
-        
-        $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Cloudflared"
-        if (Test-Path $RegistryPath) {
-            $EnvData = @("http_proxy=$ProxyUrl", "https_proxy=$ProxyUrl")
-            Set-ItemProperty -Path $RegistryPath -Name "Environment" -Value $EnvData -Type MultiString
-            Write-Host "Proxy settings applied to service registry." -ForegroundColor Green
-        } else {
-            Write-Warning "Could not find Cloudflared service registry key."
+    try {
+        $DefaultProxy = [System.Net.WebRequest]::DefaultWebProxy
+        if ($null -ne $DefaultProxy) {
+            $TargetUri = [Uri]"https://www.google.com"
+            $Proxy = $DefaultProxy.GetProxy($TargetUri)
+            
+            if ($Proxy -and $Proxy.AbsoluteUri -ne $TargetUri.AbsoluteUri) {
+                $ProxyUrl = $Proxy.AbsoluteUri
+                Write-Host "Detected Proxy: $ProxyUrl" -ForegroundColor Yellow
+                Write-Host "Configuring Cloudflared service to use this proxy..."
+                
+                $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Cloudflared"
+                if (Test-Path $RegistryPath) {
+                    $EnvData = @("http_proxy=$ProxyUrl", "https_proxy=$ProxyUrl")
+                    Set-ItemProperty -Path $RegistryPath -Name "Environment" -Value $EnvData -Type MultiString
+                    Write-Host "Proxy settings applied to service registry." -ForegroundColor Green
+                } else {
+                    Write-Warning "Could not find Cloudflared service registry key."
+                }
+            }
         }
+    } catch {
+        Write-Warning "Proxy detection skipped due to error: $_"
     }
     # ---------------------------
 
