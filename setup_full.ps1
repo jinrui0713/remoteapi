@@ -8,14 +8,97 @@ $ErrorActionPreference = "Stop"
 $ScriptPath = $PSScriptRoot
 Set-Location $ScriptPath
 
-# Enable TLS 1.2 (Required for GitHub and other modern sites)
+# Enable TLS 1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-Write-Host "=== Starting Auto Setup Tool ===" -ForegroundColor Cyan
+# --- Robust Download Function ---
+function Download-File {
+    param (
+        [string]$Url,
+        [string]$OutputFile
+    )
+
+    $UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    $Downloaded = $false
+
+    Write-Host "Downloading: $Url"
+
+    # Method 1: Standard Invoke-WebRequest
+    if (-not $Downloaded) {
+        try {
+            Write-Host "  [Attempt 1] Standard download..." -NoNewline
+            Invoke-WebRequest -Uri $Url -OutFile $OutputFile -UserAgent $UserAgent -ErrorAction Stop
+            Write-Host " Success" -ForegroundColor Green
+            $Downloaded = $true
+        } catch {
+            Write-Host " Failed ($($_))" -ForegroundColor Yellow
+        }
+    }
+
+    # Method 2: Invoke-WebRequest with Proxy Bypass (Direct Connection)
+    if (-not $Downloaded) {
+        try {
+            Write-Host "  [Attempt 2] Bypassing proxy..." -NoNewline
+            $OldProxy = [System.Net.WebRequest]::DefaultWebProxy
+            [System.Net.WebRequest]::DefaultWebProxy = $null
+            
+            Invoke-WebRequest -Uri $Url -OutFile $OutputFile -UserAgent $UserAgent -ErrorAction Stop
+            
+            [System.Net.WebRequest]::DefaultWebProxy = $OldProxy
+            Write-Host " Success" -ForegroundColor Green
+            $Downloaded = $true
+        } catch {
+            [System.Net.WebRequest]::DefaultWebProxy = $OldProxy
+            Write-Host " Failed ($($_))" -ForegroundColor Yellow
+        }
+    }
+
+    # Method 3: curl.exe (External tool, often handles SSL/Proxy better)
+    if (-not $Downloaded -and (Get-Command "curl.exe" -ErrorAction SilentlyContinue)) {
+        try {
+            Write-Host "  [Attempt 3] Using curl.exe..." -NoNewline
+            # -L: Follow redirects, -k: Insecure (skip SSL check), -f: Fail silently on error
+            $argList = "-L", "-k", "-f", $Url, "-o", $OutputFile, "-A", $UserAgent
+            $p = Start-Process "curl.exe" -ArgumentList $argList -Wait -NoNewWindow -PassThru
+            
+            if ($p.ExitCode -eq 0 -and (Test-Path $OutputFile) -and (Get-Item $OutputFile).Length -gt 0) {
+                Write-Host " Success" -ForegroundColor Green
+                $Downloaded = $true
+            } else {
+                Write-Host " Failed (Exit Code: $($p.ExitCode))" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host " Failed ($($_))" -ForegroundColor Yellow
+        }
+    }
+
+    # Method 4: Invoke-WebRequest with SSL Validation Disabled (Last Resort)
+    if (-not $Downloaded) {
+        try {
+            Write-Host "  [Attempt 4] Disabling SSL validation..." -NoNewline
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+            Invoke-WebRequest -Uri $Url -OutFile $OutputFile -UserAgent $UserAgent -ErrorAction Stop
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+            Write-Host " Success" -ForegroundColor Green
+            $Downloaded = $true
+        } catch {
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+            Write-Host " Failed ($($_))" -ForegroundColor Red
+        }
+    }
+
+    if (-not $Downloaded) {
+        throw "All download methods failed for $Url"
+    }
+}
+# --------------------------------
+
+Write-Host "=== Starting Auto Setup Tool (Robust Mode) ===" -ForegroundColor Cyan
 
 # 1. Install Python dependencies
 Write-Host "`n[1/5] Installing Python libraries..."
 try {
+    # pip usually handles proxies well, but if it fails, user might need to set HTTP_PROXY env var
     pip install -r "requirements.txt"
     pip install pyinstaller
 }
@@ -33,7 +116,7 @@ if (-not (Test-Path $FFmpegExe)) {
     $TempDir = Join-Path $ScriptPath "ffmpeg_temp"
     
     try {
-        Invoke-WebRequest -Uri $FFmpegUrl -OutFile $ZipPath -UserAgent "Mozilla/5.0"
+        Download-File -Url $FFmpegUrl -OutputFile $ZipPath
         
         Write-Host "Extracting ffmpeg..."
         Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
@@ -68,7 +151,7 @@ if (-not (Test-Path $CloudflaredExe)) {
     Write-Host "`n[3/5] Downloading cloudflared..."
     $CloudflaredUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
     try {
-        Invoke-WebRequest -Uri $CloudflaredUrl -OutFile $CloudflaredExe -UserAgent "Mozilla/5.0"
+        Download-File -Url $CloudflaredUrl -OutputFile $CloudflaredExe
         Write-Host "cloudflared setup complete." -ForegroundColor Green
     }
     catch {
