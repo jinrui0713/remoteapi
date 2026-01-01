@@ -558,49 +558,6 @@
                     this.fetchAllData();
                 }, 2000); // Poll every 2s
             },
-                async deleteJob(jobId) {
-                    try {
-                        await axios.delete(`/jobs/${jobId}`);
-                        this.fetchJobs();
-                    } catch (error) {
-                        console.error('Error deleting job:', error);
-                    }
-                },
-                getStatusClass(status) {
-                    switch(status) {
-                        case 'queued': return 'bg-secondary';
-                        case 'downloading': return 'bg-primary';
-                        case 'finished': return 'bg-success';
-                        case 'error': return 'bg-danger';
-                        default: return 'bg-secondary';
-                    }
-                },
-                getFileUrl(filename) {
-                    if (!filename) return '#';
-                    return '/downloads/' + encodeURIComponent(filename);
-                },
-                getDownloadUrl(filename) {
-                    if (!filename) return '#';
-                    return '/api/download/' + encodeURIComponent(filename);
-                },
-                playVideo(filename) {
-                    // Use StaticFiles for playback (better range support)
-                    this.currentVideoUrl = this.getFileUrl(filename);
-                    if (!this.modalInstance) {
-                        this.modalInstance = new bootstrap.Modal(this.$refs.videoModal);
-                        this.$refs.videoModal.addEventListener('hidden.bs.modal', () => {
-                            this.$refs.videoPlayer.pause();
-                            this.currentVideoUrl = '';
-                        });
-                    }
-                    this.modalInstance.show();
-                }
-            },
-            mounted() {
-                this.fetchJobs();
-                // Poll every 1 second
-                this.timer = setInterval(this.fetchJobs, 1000);
-            },
             beforeUnmount() {
                 if (this.timer) clearInterval(this.timer);
             }
