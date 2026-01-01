@@ -149,8 +149,9 @@ def run_download(job_id: str, req: DownloadRequest):
         'quiet': True,
         'no_warnings': True,
         'progress_hooks': [lambda d: progress_hook(d, job_id)],
-        # Ensure we get the merged file path
         'writethumbnail': False,
+        'restrictfilenames': True, # Ensure filenames are safe (ASCII, no spaces)
+        'windowsfilenames': True, # Force Windows-compatible filenames
     }
 
     # Format selection
@@ -163,6 +164,9 @@ def run_download(job_id: str, req: DownloadRequest):
         }]
     else:
         # Video format
+        # Force MP4 merge to ensure browser compatibility and predictable extension
+        ydl_opts['merge_output_format'] = 'mp4'
+        
         if req.quality == 'best':
             ydl_opts['format'] = 'bestvideo+bestaudio/best'
         else:
@@ -171,10 +175,6 @@ def run_download(job_id: str, req: DownloadRequest):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Get title first (optional, but good for UI)
-            # info = ydl.extract_info(req.url, download=False)
-            # job.title = info.get('title')
-            
             # Start download and get info
             info = ydl.extract_info(req.url, download=True)
             
@@ -183,29 +183,58 @@ def run_download(job_id: str, req: DownloadRequest):
 
             # Determine final filename
             final_filename = None
+            
+            # Check requested_downloads (populated when merging/converting)
             if 'requested_downloads' in info:
                 for d in info['requested_downloads']:
                     if 'filepath' in d:
                         final_filename = d['filepath']
+                        # If we found a filepath, break. 
+                        # Usually the last one is the merged one? 
+                        # Actually requested_downloads is a list of downloads.
+                        # If merging, it might contain video and audio.
+                        # But the 'filepath' in the info dict itself might be the merged one?
             
             if not final_filename:
-                final_filename = info.get('filepath') or ydl.prepare_filename(info)
-
-            # If post-processing changed the extension (e.g. audio conversion), 
-            # prepare_filename might return the original extension.
-            # We should check if the file exists, if not, try to find it.
+                final_filename = info.get('filepath')
             
+            if not final_filename:
+                # Fallback to prepare_filename (might be wrong extension if converted)
+                final_filename = ydl.prepare_filename(info)
+
+            # Verify existence
             if final_filename and os.path.exists(final_filename):
                 job.filename = os.path.basename(final_filename)
             else:
-                # Fallback: Search in DOWNLOAD_DIR for a file with the same title
-                # This is risky if multiple files have same title but different ext
-                # But better than 404
+                # Critical fallback: Search directory for the file
+                # Since we use restrictfilenames, the filename should be predictable
+                # But if extension changed...
                 logging.warning(f"File not found at {final_filename}, searching in {DOWNLOAD_DIR}")
-                sanitized_title = info.get('title', '') # Note: this might not be sanitized
-                # We can't easily sanitize it same as yt-dlp without internal function
-                # So we just trust job.filename from progress_hook if this fails?
-                pass
+                
+                # Try to find a file that matches the title (sanitized)
+                # This is hard because we don't know exactly how it was sanitized
+                # But we can check if job.filename (from progress hook) exists
+                if job.filename:
+                    potential_path = os.path.join(DOWNLOAD_DIR, job.filename)
+                    if os.path.exists(potential_path):
+                        logging.info(f"Found file using progress hook filename: {job.filename}")
+                        # Keep job.filename as is
+                    else:
+                        # Try with mp4 extension if video
+                        if req.type == 'video':
+                            base, _ = os.path.splitext(job.filename)
+                            mp4_path = os.path.join(DOWNLOAD_DIR, base + ".mp4")
+                            if os.path.exists(mp4_path):
+                                job.filename = os.path.basename(mp4_path)
+                                logging.info(f"Found file with mp4 extension: {job.filename}")
+                            else:
+                                job.error_msg = "File missing after download"
+                                job.status = JobStatus.ERROR
+                                return
+                else:
+                     job.error_msg = "Could not determine filename"
+                     job.status = JobStatus.ERROR
+                     return
 
         job.status = JobStatus.FINISHED
         logging.info(f"Job {job_id} completed. Filename: {job.filename}")
