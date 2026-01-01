@@ -49,15 +49,35 @@ if (-not (Test-Path $CloudflaredExe)) {
 }
 
 try {
+    Write-Host "Stopping existing service (if any)..."
+    Start-Process -FilePath $CloudflaredExe -ArgumentList "service stop" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+    Start-Process -FilePath $CloudflaredExe -ArgumentList "service uninstall" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
     Write-Host "Installing service..."
     Start-Process -FilePath $CloudflaredExe -ArgumentList "service install $Token" -Wait -NoNewWindow
     
     Write-Host "Starting service..."
     Start-Process -FilePath $CloudflaredExe -ArgumentList "service start" -Wait -NoNewWindow
     
-    Write-Host "`n[Success] Service installed successfully!" -ForegroundColor Green
-    Write-Host "It will connect automatically even after reboot."
-    Write-Host "The URL configured in Cloudflare Dashboard will be persistent."
+    Start-Sleep -Seconds 3
+    $Service = Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
+    if ($Service.Status -eq "Running") {
+        Write-Host "`n[Success] Service installed and running!" -ForegroundColor Green
+        Write-Host "It will connect automatically even after reboot."
+    } else {
+        Write-Host "`n[FAIL] Service installed but NOT running." -ForegroundColor Red
+        Write-Host "Attempting to run interactively to diagnose..."
+        
+        Write-Host "------------------------------------------------"
+        Write-Host "Please check the output below for errors:"
+        # Run directly to see output
+        & $CloudflaredExe tunnel run --token $Token
+        Write-Host "------------------------------------------------"
+    }
+} catch {
+    Write-Error "An error occurred: $_"
+}
 } catch {
     Write-Error "An error occurred: $_"
 }
