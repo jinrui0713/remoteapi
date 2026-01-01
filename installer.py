@@ -8,6 +8,12 @@ import ctypes
 import winreg
 import time
 
+# Enable High DPI support
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except:
+    pass
+
 def is_admin():
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
@@ -21,14 +27,14 @@ class InstallerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("YtDlp Server Installer")
-        self.geometry("600x450")
-        self.resizable(False, False)
+        self.geometry("600x600")
+        self.resizable(True, True)
         
         # Variables
         self.install_dir = tk.StringVar(value=os.path.join(os.environ['LOCALAPPDATA'], 'YtDlpApiServer'))
         self.port = tk.StringVar(value="8000")
         self.role = tk.StringVar(value="host") # host or server
-        self.status_msg = tk.StringVar(value="Ready to install.")
+        self.status_msg = tk.StringVar(value="Click 'INSTALL NOW' to begin.")
         
         self.create_widgets()
 
@@ -83,11 +89,9 @@ class InstallerApp(tk.Tk):
         lbl_status = ttk.Label(main_frame, textvariable=self.status_msg, foreground="blue")
         lbl_status.pack(pady=(0, 10))
         
-        # Make the button larger and easier to click
-        style = ttk.Style()
-        style.configure('Big.TButton', font=('Segoe UI', 12, 'bold'))
-        
-        btn_install = ttk.Button(main_frame, text="INSTALL NOW", command=self.start_install, style='Big.TButton')
+        # Use tk.Button for better styling control and visibility
+        btn_install = tk.Button(main_frame, text="INSTALL NOW", command=self.start_install, 
+                              font=('Segoe UI', 12, 'bold'), bg='#0078D7', fg='white', cursor='hand2')
         btn_install.pack(fill=tk.X, ipady=10, pady=10)
 
     def browse_dir(self):
