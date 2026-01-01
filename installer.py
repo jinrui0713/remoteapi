@@ -134,7 +134,14 @@ class InstallerApp(tk.Tk):
             base_path = os.path.dirname(os.path.abspath(__file__))
             
         # Files to copy
-        files_to_copy = ['YtDlpApiServer.exe', 'ffmpeg.exe', 'ffprobe.exe']
+        files_to_copy = [
+            'YtDlpApiServer.exe', 
+            'ffmpeg.exe', 
+            'ffprobe.exe',
+            'cloudflared.exe',
+            'start_public_hidden.vbs',
+            'show_public_url.ps1'
+        ]
         
         for f in files_to_copy:
             src = os.path.join(base_path, f)
@@ -201,6 +208,19 @@ class InstallerApp(tk.Tk):
             shortcut_path = os.path.join(desktop, "YtDlp Manager.url")
             with open(shortcut_path, 'w') as f:
                 f.write(f"[InternetShortcut]\nURL=http://localhost:{port}\nIconIndex=0\nIconFile={exe_path}\n")
+
+            # Create "Start Public Access" batch file
+            public_bat_path = os.path.join(desktop, "Start Public Access.bat")
+            with open(public_bat_path, 'w') as f:
+                f.write('@echo off\n')
+                f.write('chcp 65001 > nul\n')
+                f.write(f'cd /d "{target_dir}"\n')
+                f.write('echo Starting Cloudflare Tunnel...\n')
+                f.write('start "" "start_public_hidden.vbs"\n')
+                f.write('echo Waiting for connection...\n')
+                f.write('timeout /t 8 > nul\n')
+                f.write('powershell -ExecutionPolicy Bypass -File "show_public_url.ps1"\n')
+                f.write('pause\n')
 
 if __name__ == "__main__":
     if not is_admin():

@@ -48,11 +48,23 @@ if exist "bin\ffmpeg.exe" (
     move ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin ffmpeg_temp\bin
 )
 
+REM Download Cloudflared
+if not exist "bin" mkdir "bin"
+if not exist "bin\cloudflared.exe" (
+    echo Downloading Cloudflared...
+    powershell -Command "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile 'bin\cloudflared.exe'"
+)
+if not exist "ffmpeg_temp\bin" mkdir "ffmpeg_temp\bin"
+copy "bin\cloudflared.exe" "ffmpeg_temp\bin\"
+
 echo Copying files to release staging...
 copy dist\YtDlpApiServer.exe release\
 move "ffmpeg_temp\bin\ffmpeg.exe" release\
 move "ffmpeg_temp\bin\ffprobe.exe" release\
+move "ffmpeg_temp\bin\cloudflared.exe" release\
 xcopy /E /I static release\static
+copy start_public_hidden.vbs release\
+copy show_public_url.ps1 release\
 
 REM Cleanup intermediate files to save space
 rmdir /s /q ffmpeg_temp
@@ -67,6 +79,9 @@ pyinstaller --onefile --name Setup --clean --noconsole ^
     --add-data "release\YtDlpApiServer.exe;." ^
     --add-data "release\ffmpeg.exe;." ^
     --add-data "release\ffprobe.exe;." ^
+    --add-data "release\cloudflared.exe;." ^
+    --add-data "release\start_public_hidden.vbs;." ^
+    --add-data "release\show_public_url.ps1;." ^
     --add-data "release\static;static" ^
     installer.py
 
