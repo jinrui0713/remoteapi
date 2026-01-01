@@ -3,51 +3,69 @@
 Write-Host "=== System & Network Environment Check Tool ===" -ForegroundColor Cyan
 Write-Host "Date: $(Get-Date)"
 
-# 1. Administrator Privileges
-Write-Host "`n[1] Checking Administrator Privileges..."
-$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-if ($IsAdmin) {
-    Write-Host "PASS: Running as Administrator" -ForegroundColor Green
+# AppData Paths
+$AppDataDir = Join-Path $env:LOCALAPPDATA "YtDlpApiServer"
+$LogFile = Join-Path $AppDataDir "server.log"
+$ExePath = Join-Path $AppDataDir "YtDlpApiServer.exe"
+
+# 1. Process Status
+Write-Host "`n[1] Checking Server Process..."
+$Process = Get-Process -Name "YtDlpApiServer" -ErrorAction SilentlyContinue
+if ($Process) {
+    Write-Host "PASS: Server is running (PID: $($Process.Id))" -ForegroundColor Green
 } else {
-    Write-Host "WARNING: Not running as Administrator. Some checks or setups might fail." -ForegroundColor Yellow
+    Write-Host "FAIL: Server process is NOT running." -ForegroundColor Red
 }
 
-# 2. PowerShell Execution Policy
-Write-Host "`n[2] Checking Execution Policy..."
-try {
-    $Policy = Get-ExecutionPolicy
-    Write-Host "Current Policy: $Policy"
-} catch {
-    Write-Host "FAIL: Could not check Execution Policy" -ForegroundColor Red
+# 2. Port Status
+Write-Host "`n[2] Checking Port 8000..."
+$Port = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+if ($Port) {
+    Write-Host "PASS: Port 8000 is listening." -ForegroundColor Green
+} else {
+    Write-Host "FAIL: Port 8000 is NOT listening." -ForegroundColor Red
 }
 
-# 3. Network Connectivity (Ping)
-Write-Host "`n[3] Checking Internet Connectivity (Ping)..."
-$PingTargets = @("8.8.8.8", "1.1.1.1")
-foreach ($Target in $PingTargets) {
+# 3. Cloudflared Service
+Write-Host "`n[3] Checking Cloudflared Service..."
+$Service = Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
+if ($Service) {
+    Write-Host "Service Status: $($Service.Status)"
+    if ($Service.Status -eq "Running") {
+        Write-Host "PASS: Cloudflared service is running." -ForegroundColor Green
+    } else {
+        Write-Host "FAIL: Cloudflared service is stopped." -ForegroundColor Red
+    }
+} else {
+    Write-Host "FAIL: Cloudflared service not found." -ForegroundColor Red
+}
+
+# 4. Log File Analysis
+Write-Host "`n[4] Checking Server Log..."
+if (Test-Path $LogFile) {
+    Write-Host "Log file found at: $LogFile"
+    Write-Host "--- Last 20 lines ---" -ForegroundColor Gray
+    Get-Content $LogFile -Tail 20
+    Write-Host "---------------------" -ForegroundColor Gray
+} else {
+    Write-Host "FAIL: Log file not found." -ForegroundColor Red
+}
+
+# 5. Manual Start Test
+if (-not $Process) {
+    Write-Host "`n[5] Attempting Manual Start Test..."
+    Write-Host "Running exe directly to capture output..."
     try {
-        $Ping = Test-Connection -ComputerName $Target -Count 1 -ErrorAction Stop
-        Write-Host "PASS: Ping to $Target successful" -ForegroundColor Green
+        Push-Location $AppDataDir
+        & $ExePath
+        Pop-Location
     } catch {
-        Write-Host "FAIL: Ping to $Target failed" -ForegroundColor Red
+        Write-Error "Failed to run exe: $_"
     }
 }
 
-# 4. DNS Resolution
-Write-Host "`n[4] Checking DNS Resolution..."
-$Domains = @("google.com", "github.com", "pypi.org", "www.gyan.dev")
-foreach ($Domain in $Domains) {
-    try {
-        $IP = [System.Net.Dns]::GetHostAddresses($Domain)
-        Write-Host "PASS: Resolved $Domain" -ForegroundColor Green
-    } catch {
-        Write-Host "FAIL: Could not resolve $Domain" -ForegroundColor Red
-    }
-}
-
-# 5. HTTP/HTTPS Connectivity & TLS
-Write-Host "`n[5] Checking HTTP Access & TLS..."
-# Ensure TLS 1.2 is enabled for the test
+Write-Host "`nDone. Please share the output above."
+Pause
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Write-Host "Enabled Protocols: $([Net.ServicePointManager]::SecurityProtocol)"
 
