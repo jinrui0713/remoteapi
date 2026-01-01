@@ -58,6 +58,12 @@ ffmpeg_paths = [
     os.path.join(execution_dir, "ffmpeg.exe"),
 ]
 
+# Add AppData path
+if os.name == 'nt':
+    appdata = os.environ.get('LOCALAPPDATA')
+    if appdata:
+        ffmpeg_paths.append(os.path.join(appdata, "YtDlpApiServer", "bin", "ffmpeg.exe"))
+
 ffmpeg_found = False
 for path in ffmpeg_paths:
     if os.path.exists(path):

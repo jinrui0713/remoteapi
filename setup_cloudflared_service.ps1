@@ -30,15 +30,20 @@ if ([string]::IsNullOrWhiteSpace($Token)) {
     exit
 }
 
-$CloudflaredExe = Join-Path $PSScriptRoot "bin\cloudflared.exe"
+$CloudflaredExe = Join-Path $env:LOCALAPPDATA "YtDlpApiServer\bin\cloudflared.exe"
 
 if (-not (Test-Path $CloudflaredExe)) {
-    # Fallback to root for backward compatibility
+    # Fallback to local bin
+    $CloudflaredExe = Join-Path $PSScriptRoot "bin\cloudflared.exe"
+}
+
+if (-not (Test-Path $CloudflaredExe)) {
+    # Fallback to root
     $CloudflaredExe = Join-Path $PSScriptRoot "cloudflared.exe"
 }
 
 if (-not (Test-Path $CloudflaredExe)) {
-    Write-Error "cloudflared.exe not found in bin folder or root. Please run setup_full.ps1 first."
+    Write-Error "cloudflared.exe not found. Please run setup_full.ps1 first."
     Pause
     exit
 }

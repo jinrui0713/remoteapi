@@ -10,9 +10,13 @@ $ErrorActionPreference = "Stop"
 $ScriptPath = $PSScriptRoot
 Set-Location $ScriptPath
 
-# Create bin directory
-$BinDir = Join-Path $ScriptPath "bin"
+# Define AppData bin directory
+$AppDataDir = Join-Path $env:LOCALAPPDATA "YtDlpApiServer"
+$BinDir = Join-Path $AppDataDir "bin"
+
+# Create directories if they don't exist
 if (-not (Test-Path $BinDir)) {
+    Write-Host "Creating AppData directory: $BinDir"
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 }
 
@@ -281,7 +285,7 @@ WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
 }
 
 Write-Host "`n=== Setup Complete! ===" -ForegroundColor Cyan
-Write-Host "1. FFmpeg and Cloudflared are in 'bin' folder."
+Write-Host "1. Tools (FFmpeg, Cloudflared) are installed in: $BinDir"
 Write-Host "2. Cloudflare Tunnel is running as a service."
 Write-Host "3. API Server is running in background."
 Write-Host "4. Both will start automatically on reboot."
