@@ -31,19 +31,28 @@ mkdir release
 
 REM Download and bundle FFmpeg
 echo.
-echo Downloading FFmpeg (this may take a while)...
-powershell -Command "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile 'ffmpeg.zip'"
+if exist "bin\ffmpeg.exe" (
+    echo Found FFmpeg in bin folder. Copying...
+    mkdir ffmpeg_temp\bin
+    copy "bin\ffmpeg.exe" "ffmpeg_temp\bin\"
+    copy "bin\ffprobe.exe" "ffmpeg_temp\bin\"
+) else (
+    echo Downloading FFmpeg (this may take a while)...
+    powershell -Command "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile 'ffmpeg.zip'"
 
-echo Extracting FFmpeg...
-powershell -Command "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path 'ffmpeg.zip' -DestinationPath 'ffmpeg_temp' -Force"
+    echo Extracting FFmpeg...
+    powershell -Command "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path 'ffmpeg.zip' -DestinationPath 'ffmpeg_temp' -Force"
+    
+    REM Move to temp bin structure for consistent copying below
+    move ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin ffmpeg_temp\bin
+)
 
 echo Copying FFmpeg binaries...
-REM Adjust path to match extracted folder structure (usually in ffmpeg-master-latest-win64-gpl/bin/)
-xcopy /y "ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" release\
-xcopy /y "ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe" release\
+xcopy /y "ffmpeg_temp\bin\ffmpeg.exe" release\
+xcopy /y "ffmpeg_temp\bin\ffprobe.exe" release\
 
 REM Remove temporary files
-del ffmpeg.zip
+if exist ffmpeg.zip del ffmpeg.zip
 rmdir /s /q ffmpeg_temp
 
 REM Copy files

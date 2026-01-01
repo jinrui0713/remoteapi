@@ -42,10 +42,23 @@ else:
     execution_dir = bundle_dir
 
 # ffmpeg設定
-ffmpeg_exe = os.path.join(bundle_dir, "ffmpeg.exe")
-if os.path.exists(ffmpeg_exe):
-    logging.info(f"Found bundled ffmpeg at: {ffmpeg_exe}")
-    os.environ["PATH"] += os.pathsep + bundle_dir
+ffmpeg_paths = [
+    os.path.join(bundle_dir, "ffmpeg.exe"),
+    os.path.join(execution_dir, "bin", "ffmpeg.exe"),
+    os.path.join(execution_dir, "ffmpeg.exe"),
+]
+
+ffmpeg_found = False
+for path in ffmpeg_paths:
+    if os.path.exists(path):
+        logging.info(f"Found ffmpeg at: {path}")
+        ffmpeg_dir = os.path.dirname(path)
+        os.environ["PATH"] += os.pathsep + ffmpeg_dir
+        ffmpeg_found = True
+        break
+
+if not ffmpeg_found:
+    logging.warning("ffmpeg not found in bundled or execution directories. Relying on system PATH.")
 
 # ダウンロード保存先
 DOWNLOAD_DIR = os.path.join(execution_dir, "downloads")

@@ -13,7 +13,16 @@ Write-Host "This script installs the tunnel as a Windows service using your Clou
 Write-Host "Note: You need a Cloudflare account and domain for this."
 Write-Host ""
 
-$Token = Read-Host "Enter your Token (starts with eyJh...)"
+$Token = ""
+$TokenFile = Join-Path $PSScriptRoot "cloudflare_token.txt"
+if (Test-Path $TokenFile) {
+    $Token = Get-Content $TokenFile -Raw
+    $Token = $Token.Trim()
+}
+
+if ([string]::IsNullOrWhiteSpace($Token)) {
+    $Token = Read-Host "Enter your Token (starts with eyJh...)"
+}
 
 if ([string]::IsNullOrWhiteSpace($Token)) {
     Write-Error "Token is empty."
@@ -21,10 +30,15 @@ if ([string]::IsNullOrWhiteSpace($Token)) {
     exit
 }
 
-$CloudflaredExe = Join-Path $PSScriptRoot "cloudflared.exe"
+$CloudflaredExe = Join-Path $PSScriptRoot "bin\cloudflared.exe"
 
 if (-not (Test-Path $CloudflaredExe)) {
-    Write-Error "cloudflared.exe not found. Please run setup_full.ps1 first."
+    # Fallback to root for backward compatibility
+    $CloudflaredExe = Join-Path $PSScriptRoot "cloudflared.exe"
+}
+
+if (-not (Test-Path $CloudflaredExe)) {
+    Write-Error "cloudflared.exe not found in bin folder or root. Please run setup_full.ps1 first."
     Pause
     exit
 }
