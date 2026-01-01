@@ -1,103 +1,86 @@
-# Windows yt-dlp API Server
+# Yt-Dlp API Server (Multi-Server Edition)
 
-Windows上で動作する `yt-dlp` のAPIサーバーです。
-Windowsの起動時に自動的にバックグラウンドで開始するように設定できます。
+Windows用の高機能な動画ダウンロードサーバーです。
+複数台のPCを連携させ、1つの管理画面からまとめてダウンロード指示やファイル管理を行うことができます。
 
-## 必要要件
+## 主な機能
 
-- Windows 10/11
-- Python 3.8以上 (PATHに通っていること)
+*   **GUIインストーラー**: 複雑なコマンド操作不要で、簡単にセットアップできます。
+*   **マルチサーバー対応**: 複数のPCを「サーバーノード」として追加し、負荷分散やストレージの分散が可能です。
+*   **自動リカバリー**: サーバープロセスが停止しても、自動的に再起動する監視機能が組み込まれています。
+*   **統合ライブラリ**: 接続されている全サーバーのダウンロード済みファイルを1つのリストで管理・再生・ダウンロードできます。
+*   **スマートダウンロード**: 「Auto」モードを選択すると、現在最も空いているサーバーに自動的にダウンロードジョブを割り振ります。
 
-## 自動セットアップ（推奨）
+## インストール方法
 
-以下のスクリプトを実行すると、環境構築からサーバー起動、Cloudflare Tunnelの設定までを全自動で行います。
+### 1. インストーラーのダウンロード
+[Releasesページ](https://github.com/jinrui0713/remoteapi/releases) から最新の `Setup.exe` をダウンロードしてください。
 
-### 事前準備（Cloudflare Tunnelを利用する場合）
+### 2. インストール
+`Setup.exe` を実行すると、セットアップ画面が表示されます。
 
-Cloudflare Zero Trustで発行されたトークンをお持ちの場合は、このフォルダにある `cloudflare_token.txt` にトークン（`eyJh...` で始まる文字列）を貼り付けて保存してください。
-これを行うと、セットアップ時に自動的にトンネルが接続され、外部公開設定が完了します。
+#### 役割の選択 (Role Selection)
+*   **Host / Manager (推奨)**:
+    *   メインで操作するPC向けです。
+    *   サーバー機能に加え、デスクトップにショートカットを作成し、インストール後にブラウザを自動で開きます。
+*   **Server Node (Worker)**:
+    *   ダウンロード処理専用のサブPC向けです。
+    *   バックグラウンドで静かに動作します。
 
-### 実行手順
+#### 設定 (Configuration)
+*   **Install Path**: インストール先フォルダ（通常はそのままでOK）。
+*   **Server Port**: 使用するポート番号（デフォルト: `8000`）。
 
-1. PowerShellを**管理者権限**で開きます（フォルダ内の何もないところをShift+右クリック -> 「PowerShell ウィンドウをここで開く」など）。
-2. 以下のコマンドを実行します。
+「Install」ボタンを押すと、必要なファイルの配置、自動起動タスクの登録、ファイアウォールの設定が自動的に行われます。
 
+## 使い方
+
+### 1. 管理画面へのアクセス
+インストールしたPC（Host）で、デスクトップのショートカット「YtDlp Manager」を開くか、ブラウザで `http://localhost:8000` にアクセスします。
+
+### 2. サーバーの追加（マルチサーバー運用）
+他のPCもサーバーとして利用する場合：
+1.  そのPCでも `Setup.exe` を実行しインストールします。
+2.  メインPCの管理画面右上の **"Servers"** ボタンをクリックします。
+3.  **"Add Server"** に、追加したいPCのURLを入力します。
+    *   例: `http://192.168.1.15:8000`
+4.  追加されると、そのPCのステータスやジョブ状況が表示されるようになります。
+
+### 3. ダウンロード
+1.  動画のURLを入力します。
+2.  **Target Server** を選択します。
+    *   **Auto (Least Busy)**: アクティブなジョブが最も少ないサーバーを自動選択します。
+    *   特定のサーバーを指定することも可能です。
+3.  「Start Download」をクリックします。
+
+### 4. クッキーの管理 (Cookies)
+YouTubeなどの会員限定動画をダウンロードする場合：
+1.  `cookies.txt` を用意します。
+2.  画面右上の **"Upload Cookies"** からアップロードします。
+3.  接続されている**全てのオンラインサーバー**にクッキーが同期されます。
+
+## 開発者向け情報 (Development)
+
+ソースコードからビルドする場合：
+
+### 必要要件
+*   Python 3.12+
+*   PowerShell
+
+### ビルド手順
 ```powershell
-# スクリプトの実行ポリシーエラーが出る場合は、以下のコマンドで実行してください
-powershell -ExecutionPolicy Bypass -File .\setup_full.ps1
-```
-
-または、現在のセッションのみ実行を許可する場合：
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\setup_full.ps1
-```
-
-スクリプトが完了すると、以下の状態になります：
-- 必要なツール（ffmpeg, cloudflared）が `bin` フォルダにインストールされます。
-- APIサーバーがバックグラウンドで起動します。
-- （トークンがある場合）Cloudflare Tunnelがサービスとして起動し、外部からアクセス可能になります。
-- PC再起動時もこれらが自動的に立ち上がるよう設定されます。
-
-## 手動インストール
-
-1. このリポジトリを適当なフォルダに配置します（例: `C:\Tools\remoteapi`）。
-2. コマンドプロンプトまたはPowerShellを開き、そのフォルダに移動します。
-3. 以下のコマンドを実行して、必要なライブラリをインストールします。
-
-```bash
+# 仮想環境の作成と依存関係のインストール
+python -m venv venv
+.\venv\Scripts\activate
 pip install -r requirements.txt
+
+# ビルドスクリプトの実行
+.\build.bat
 ```
+`release` フォルダに `Setup.exe` が生成されます。
 
-## 使い方（手動実行）
-
-テストなどで手動で起動する場合は、以下のバッチファイルをダブルクリックするか、コマンドラインから実行してください。
-
-```bash
-start_server.bat
-```
-
-サーバーが起動すると `http://localhost:8000` でアクセス可能になります。
-APIドキュメントは `http://localhost:8000/docs` で確認できます。
-
-## 利用方法
-
-### 1. Web UI
-
-ブラウザで `http://localhost:8000` にアクセスすると、シンプルなWebインターフェースが表示されます。
-ここから動画のURLを入力してダウンロードしたり、ダウンロード状況を確認したりできます。
-
-### 2. APIの利用
-
-外部プログラムからAPIを呼び出して利用することもできます。
-
-#### 動画情報の取得
-
-```http
-GET /info?url={video_url}
-```
-
-**レスポンス例:**
-```json
-{
-  "title": "Video Title",
-  "duration": 120,
-  "uploader": "Channel Name",
-  "view_count": 1000,
-  "url": "https://..."
-}
-```
-
-#### ダウンロードの開始
-
-```http
-POST /download
-Content-Type: application/json
-
-{
-  "url": "https://www.youtube.com/watch?v=...",
-  "type": "video",       // "video" or "audio"
+## ライセンス
+MIT License
   "quality": "best",     // "best", "1080", "720", "480"
   "audio_format": "mp3"  // "mp3", "m4a", "wav" (type=audioの場合)
 }
