@@ -10,10 +10,25 @@ $ErrorActionPreference = "Stop"
 $ScriptPath = $PSScriptRoot
 Set-Location $ScriptPath
 
+# Fix for "fatal: detected dubious ownership in repository"
+# This happens when the repo is owned by User but script runs as SYSTEM
+try {
+    git config --global --add safe.directory '*'
+} catch {
+    Write-Warning "Could not set safe.directory. Git operations might fail."
+}
+
 Start-Transcript -Path "update_log.txt" -Force
 
 Write-Host "=== Starting Update Process ===" -ForegroundColor Cyan
 Write-Host "Date: $(Get-Date)"
+
+# Check for Git
+if (-not (Get-Command "git" -ErrorAction SilentlyContinue)) {
+    Write-Error "Git is not installed or not in PATH. Cannot update."
+    Stop-Transcript
+    exit
+}
 
 # 1. Git Pull
 Write-Host "`n[1/4] Checking for updates from GitHub..."
