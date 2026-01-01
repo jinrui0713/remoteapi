@@ -1,6 +1,6 @@
 # update_app.ps1
 
-# 管理者権限チェック
+# Check for Administrator privileges
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Warning "This script must be run as Administrator."
     exit
@@ -33,7 +33,7 @@ if (-not (Get-Command "git" -ErrorAction SilentlyContinue)) {
 # 1. Git Pull
 Write-Host "`n[1/4] Checking for updates from GitHub..."
 try {
-    # フェッチして差分確認
+    # Fetch and check diff
     git fetch origin main
     $LocalHash = git rev-parse HEAD
     $RemoteHash = git rev-parse origin/main
@@ -45,7 +45,7 @@ try {
     }
 
     Write-Host "New version found. Updating..." -ForegroundColor Yellow
-    # 強制的にリモートに合わせる（ローカルの変更は破棄）
+    # Force reset to remote (discard local changes)
     git reset --hard origin/main
     git pull origin main
 } catch {

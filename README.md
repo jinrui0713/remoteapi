@@ -48,6 +48,105 @@ start_server.bat
 サーバーが起動すると `http://localhost:8000` でアクセス可能になります。
 APIドキュメントは `http://localhost:8000/docs` で確認できます。
 
+## 利用方法
+
+### 1. Web UI
+
+ブラウザで `http://localhost:8000` にアクセスすると、シンプルなWebインターフェースが表示されます。
+ここから動画のURLを入力してダウンロードしたり、ダウンロード状況を確認したりできます。
+
+### 2. APIの利用
+
+外部プログラムからAPIを呼び出して利用することもできます。
+
+#### 動画情報の取得
+
+```http
+GET /info?url={video_url}
+```
+
+**レスポンス例:**
+```json
+{
+  "title": "Video Title",
+  "duration": 120,
+  "uploader": "Channel Name",
+  "view_count": 1000,
+  "url": "https://..."
+}
+```
+
+#### ダウンロードの開始
+
+```http
+POST /download
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=...",
+  "type": "video",       // "video" or "audio"
+  "quality": "best",     // "best", "1080", "720", "480"
+  "audio_format": "mp3"  // "mp3", "m4a", "wav" (type=audioの場合)
+}
+```
+
+**レスポンス例:**
+```json
+{
+  "job_id": "uuid-string",
+  "message": "Queued"
+}
+```
+
+#### ジョブ状態の確認
+
+```http
+GET /jobs/{job_id}
+```
+
+### 3. Pythonクライアントの例
+
+`client_example.py` にPythonからAPIを利用するサンプルコードが含まれています。
+必要に応じて `BASE_URL` を変更して利用してください。
+
+```python
+# client_example.py の一部
+import requests
+
+BASE_URL = "http://localhost:8000"
+
+def test_download(video_url):
+    payload = {"url": video_url, "type": "video", "quality": "best"}
+    response = requests.post(f"{BASE_URL}/download", json=payload)
+    print(response.json())
+```
+
+## 高度な設定：Cloudflare Tunnel（独自ドメイン）
+
+Cloudflareのアカウントとドメインをお持ちの場合、固定ドメインで外部公開し、Windowsサービスとして常駐させることができます。
+これにより、PCを再起動しても自動的に接続が復帰し、常に同じURLでアクセス可能になります。
+
+### 手順
+
+1.  **Cloudflare Zero Trustの設定**
+    *   [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) にアクセスします。
+    *   左メニューから `Networks` > `Tunnels` を選択し、`Create a tunnel` をクリックします。
+    *   Connectorとして `Cloudflared` を選択します。
+    *   OS選択画面で `Windows` を選択すると、インストールコマンドが表示されます。
+    *   そのコマンド内にある **トークン** （`eyJh...` で始まる長い文字列）だけをコピーして控えておきます。
+
+2.  **サービス化スクリプトの実行**
+    *   このフォルダにある `setup_cloudflared_service.ps1` を右クリックし、「PowerShellで実行」を選択するか、管理者権限のPowerShellから実行します。
+    *   「トークンを入力してください」と表示されたら、先ほどコピーしたトークンを貼り付けてEnterキーを押します。
+
+3.  **公開ホスト名の設定**
+    *   Cloudflareのダッシュボードに戻り、`Next` をクリックします。
+    *   `Public Hostname` タブで、公開したいドメイン（例: `api.yourdomain.com`）を設定します。
+    *   `Service` の設定で、Typeを `HTTP`、URLを `localhost:8000` に設定します。
+    *   `Save Tunnel` をクリックして完了です。
+
+これで、設定したドメイン経由でAPIサーバーにアクセスできるようになります。
+
 ## 自動起動の設定（推奨）
 
 Windowsの起動時に自動的にサーバーが立ち上がるように設定するには、以下の手順を行います。

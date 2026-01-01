@@ -4,32 +4,32 @@ cd /d %~dp0
 
 echo Building YtDlpApiServer...
 
-:: 仮想環境の確認と作成
+REM Check and create virtual environment
 if not exist venv (
     echo Creating virtual environment...
     python -m venv venv
 )
 
-:: 仮想環境のアクティベート
+REM Activate virtual environment
 call venv\Scripts\activate
 
-:: 依存関係のインストール
+REM Install dependencies
 echo Installing dependencies...
 pip install -r requirements.txt
 
-:: PyInstallerによるビルド
-:: --onefile: 1つのexeファイルにまとめる
-:: --noconsole: コンソールウィンドウを表示しない（バックグラウンド実行用）
-:: --name: 出力ファイル名
+REM Build with PyInstaller
+REM --onefile: Bundle into a single exe
+REM --noconsole: Do not show console window (for background execution)
+REM --name: Output file name
 echo Running PyInstaller...
 pyinstaller --onefile --name YtDlpApiServer --clean main.py
 
-:: 配布用フォルダの作成
+REM Create release package
 echo Creating release package...
 if exist release rmdir /s /q release
 mkdir release
 
-:: FFmpegのダウンロードと同梱
+REM Download and bundle FFmpeg
 echo.
 echo Downloading FFmpeg (this may take a while)...
 powershell -Command "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile 'ffmpeg.zip'"
@@ -38,15 +38,15 @@ echo Extracting FFmpeg...
 powershell -Command "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path 'ffmpeg.zip' -DestinationPath 'ffmpeg_temp' -Force"
 
 echo Copying FFmpeg binaries...
-:: 解凍されたフォルダ構造に合わせてパスを調整（通常は ffmpeg-master-latest-win64-gpl/bin/ にある）
+REM Adjust path to match extracted folder structure (usually in ffmpeg-master-latest-win64-gpl/bin/)
 xcopy /y "ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" release\
 xcopy /y "ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin\ffprobe.exe" release\
 
-:: 一時ファイルの削除
+REM Remove temporary files
 del ffmpeg.zip
 rmdir /s /q ffmpeg_temp
 
-:: ファイルのコピー
+REM Copy files
 copy dist\YtDlpApiServer.exe release\
 copy setup_exe.ps1 release\setup.ps1
 copy README.md release\README.txt
