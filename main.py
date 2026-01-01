@@ -116,8 +116,11 @@ executor = ThreadPoolExecutor(max_workers=2)
 class DownloadRequest(BaseModel):
     url: str
     type: str = "video" # video, audio
-    quality: str = "best" # best, 1080, 720, 480
+    quality: str = "720" # best, 1080, 720, 480
     audio_format: str = "mp3" # mp3, m4a, wav
+    subtitles: bool = True
+    subtitles_lang: str = "ja"
+    embed_subtitles: bool = True
 
 def progress_hook(d, job_id):
     """yt-dlp progress hook"""
@@ -161,6 +164,15 @@ def run_download(job_id: str, req: DownloadRequest):
         'windowsfilenames': True, # Force Windows-compatible filenames
         'noplaylist': True, # Default to single video to prevent accidental playlist downloads
     }
+
+    # Subtitle options
+    if req.subtitles:
+        ydl_opts.update({
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': [req.subtitles_lang],
+            'embedsubtitles': req.embed_subtitles,
+        })
 
     # Check for cookies.txt
     cookie_file = os.path.join(execution_dir, "cookies.txt")
