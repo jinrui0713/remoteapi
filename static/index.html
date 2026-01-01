@@ -12,7 +12,13 @@
 </head>
 <body class="bg-light">
     <div class="container py-5" id="app">
-        <h1 class="mb-4">Video Download Manager</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Video Download Manager</h1>
+            <button class="btn btn-outline-secondary" @click="updateSystem" :disabled="updating">
+                <span v-if="updating" class="spinner-border spinner-border-sm me-2"></span>
+                {{ updating ? 'Updating...' : 'Check for Updates' }}
+            </button>
+        </div>
         
         <!-- Download Form -->
         <div class="card mb-4 shadow-sm">
@@ -144,10 +150,22 @@
                     },
                     jobs: [],
                     loading: false,
+                    updating: false,
                     timer: null
                 }
             },
             methods: {
+                async updateSystem() {
+                    if (!confirm('Are you sure you want to update the system? The server will restart.')) return;
+                    this.updating = true;
+                    try {
+                        const res = await axios.post('/system/update');
+                        alert(res.data.message);
+                    } catch (error) {
+                        alert('Update failed: ' + (error.response?.data?.detail || error.message));
+                        this.updating = false;
+                    }
+                },
                 async startDownload() {
                     this.loading = true;
                     try {

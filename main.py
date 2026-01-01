@@ -211,6 +211,27 @@ async def get_info(url: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+import subprocess
+
+@app.post("/system/update")
+async def update_system():
+    """
+    Triggers the update process.
+    This will pull the latest code from git, rebuild, and restart the server.
+    """
+    try:
+        # Run update_app.ps1 in a separate process
+        # We use Popen to let it run independently and return response immediately
+        subprocess.Popen(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", "update_app.ps1"],
+            cwd=os.getcwd(),
+            creationflags=subprocess.CREATE_NEW_CONSOLE # Windows only: Create new window/process group
+        )
+        return {"message": "Update started. Server will restart in a few minutes."}
+    except Exception as e:
+        logging.error(f"Update failed to start: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start update: {str(e)}")
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
