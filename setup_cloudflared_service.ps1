@@ -57,6 +57,24 @@ try {
     Write-Host "Installing service..."
     Start-Process -FilePath $CloudflaredExe -ArgumentList "service install $Token" -Wait -NoNewWindow
     
+    # --- Proxy Configuration ---
+    $Proxy = [System.Net.WebRequest]::DefaultWebProxy.GetProxy("https://www.google.com")
+    if ($Proxy -and $Proxy.AbsoluteUri -ne "https://www.google.com/") {
+        $ProxyUrl = $Proxy.AbsoluteUri
+        Write-Host "Detected Proxy: $ProxyUrl" -ForegroundColor Yellow
+        Write-Host "Configuring Cloudflared service to use this proxy..."
+        
+        $RegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Cloudflared"
+        if (Test-Path $RegistryPath) {
+            $EnvData = @("http_proxy=$ProxyUrl", "https_proxy=$ProxyUrl")
+            Set-ItemProperty -Path $RegistryPath -Name "Environment" -Value $EnvData -Type MultiString
+            Write-Host "Proxy settings applied to service registry." -ForegroundColor Green
+        } else {
+            Write-Warning "Could not find Cloudflared service registry key."
+        }
+    }
+    # ---------------------------
+
     Write-Host "Starting service..."
     Start-Process -FilePath $CloudflaredExe -ArgumentList "service start" -Wait -NoNewWindow
     
@@ -71,6 +89,13 @@ try {
         
         Write-Host "------------------------------------------------"
         Write-Host "Please check the output below for errors:"
+        
+        # Set proxy for current session diagnosis
+        if ($ProxyUrl) {
+            $env:http_proxy = $ProxyUrl
+            $env:https_proxy = $ProxyUrl
+        }
+        
         # Run directly to see output
         & $CloudflaredExe tunnel run --token $Token
         Write-Host "------------------------------------------------"
