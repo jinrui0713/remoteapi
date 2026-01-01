@@ -42,6 +42,7 @@ if exist "bin\ffmpeg.exe" (
 
     echo Extracting FFmpeg...
     powershell -Command "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path 'ffmpeg.zip' -DestinationPath 'ffmpeg_temp' -Force"
+    del ffmpeg.zip
     
     REM Move to temp bin structure for consistent copying below
     move ffmpeg_temp\ffmpeg-master-latest-win64-gpl\bin ffmpeg_temp\bin
@@ -49,9 +50,14 @@ if exist "bin\ffmpeg.exe" (
 
 echo Copying files to release staging...
 copy dist\YtDlpApiServer.exe release\
-copy "ffmpeg_temp\bin\ffmpeg.exe" release\
-copy "ffmpeg_temp\bin\ffprobe.exe" release\
+move "ffmpeg_temp\bin\ffmpeg.exe" release\
+move "ffmpeg_temp\bin\ffprobe.exe" release\
 xcopy /E /I static release\static
+
+REM Cleanup intermediate files to save space
+rmdir /s /q ffmpeg_temp
+rmdir /s /q build
+del dist\YtDlpApiServer.exe
 
 REM Build Installer
 echo Building Installer...

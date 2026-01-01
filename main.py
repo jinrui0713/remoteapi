@@ -159,6 +159,7 @@ def run_download(job_id: str, req: DownloadRequest):
         'writethumbnail': False,
         'restrictfilenames': True, # Ensure filenames are safe (ASCII, no spaces)
         'windowsfilenames': True, # Force Windows-compatible filenames
+        'noplaylist': True, # Default to single video to prevent accidental playlist downloads
     }
 
     # Check for cookies.txt
@@ -167,15 +168,14 @@ def run_download(job_id: str, req: DownloadRequest):
         ydl_opts['cookiefile'] = cookie_file
         logging.info(f"Using cookies from {cookie_file}")
 
-    # Check if playlist and limit to 10
-    try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': 'in_playlist'}) as ydl_check:
-            info_check = ydl_check.extract_info(req.url, download=False)
-            if info_check and 'entries' in info_check:
-                logging.info(f"Playlist detected: {req.url}. Limiting to 10 items.")
-                ydl_opts['playlistend'] = 10
-    except Exception as e:
-        logging.warning(f"Failed to check playlist status: {e}")
+    # Playlist handling logic
+    # Only enable playlist if it is explicitly a playlist URL, not a video in a playlist
+    if "playlist?list=" in req.url:
+        logging.info(f"Explicit playlist URL detected: {req.url}. Enabling playlist mode (limit 10).")
+        ydl_opts['noplaylist'] = False
+        ydl_opts['playlistend'] = 10
+    elif "list=" in req.url:
+        logging.info(f"URL contains list parameter but treated as single video: {req.url}")
 
     # Format selection
     if req.type == 'audio':
