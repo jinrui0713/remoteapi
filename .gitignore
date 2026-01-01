@@ -7,3 +7,7 @@ release/
 dist/
 build/
 *.spec
+*.exe
+*.zip
+ffmpeg_temp/
+

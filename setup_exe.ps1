@@ -35,3 +35,21 @@ try {
 } catch {
     Write-Error "タスクの登録に失敗しました: $_"
 }
+
+# ファイアウォールの設定
+$FirewallRuleName = "YtDlpApiServer"
+$Port = 8000
+
+Write-Host "ファイアウォールの設定を確認しています..."
+
+# 既存のルールを確認して削除（重複防止）
+Remove-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue
+
+# 新しいルールを追加
+try {
+    New-NetFirewallRule -DisplayName $FirewallRuleName -Direction Inbound -LocalPort $Port -Protocol TCP -Action Allow -Profile Any
+    Write-Host "ファイアウォールのルール '$FirewallRuleName' (Port $Port) を追加しました。" -ForegroundColor Green
+} catch {
+    Write-Error "ファイアウォールのルール追加に失敗しました: $_"
+}
+
