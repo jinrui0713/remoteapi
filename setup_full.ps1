@@ -117,15 +117,21 @@ Write-Host "`n=== Building Executable ===" -ForegroundColor Cyan
 $ExeName = "YtDlpApiServer.exe"
 $ExePath = Join-Path $AppDataDir $ExeName
 
-if (-not (Test-Path $ExePath)) {
-    Write-Host "Building exe with PyInstaller..."
-    & ".\venv\Scripts\pyinstaller.exe" --onefile --name YtDlpApiServer --clean --distpath dist main.py
-    
-    Write-Host "Deploying exe to AppData..."
-    Copy-Item -Path "dist\$ExeName" -Destination $ExePath -Force
-} else {
-    Write-Host "Executable already exists in AppData. Skipping build." -ForegroundColor Green
+# Stop existing process if running
+$Running = Get-Process -Name "YtDlpApiServer" -ErrorAction SilentlyContinue
+if ($Running) {
+    Write-Host "Stopping existing YtDlpApiServer process..."
+    Stop-Process -Name "YtDlpApiServer" -Force
+    Start-Sleep -Seconds 2
 }
+
+# Always rebuild to ensure latest code is used
+Write-Host "Building exe with PyInstaller..."
+& ".\venv\Scripts\pyinstaller.exe" --onefile --name YtDlpApiServer --clean --distpath dist main.py
+
+Write-Host "Deploying exe to AppData..."
+Copy-Item -Path "dist\$ExeName" -Destination $ExePath -Force
+
 
 # Deploy static files
 $StaticSrc = Join-Path $ScriptPath "static"
