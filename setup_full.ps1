@@ -204,12 +204,31 @@ try {
 
 # --- Start Server Now ---
 Write-Host "`n=== Starting Server Now ===" -ForegroundColor Cyan
+
+# Verify Python works
+Write-Host "Verifying Python environment..."
+try {
+    $TestOutput = & $PythonPath -c "print('Python OK')" 2>&1
+    if ($TestOutput -match "Python OK") {
+        Write-Host "Python check passed." -ForegroundColor Green
+    } else {
+        Write-Error "Python check failed. Output: $TestOutput"
+        exit
+    }
+} catch {
+    Write-Error "Failed to execute Python: $_"
+    exit
+}
+
 # Check if already running
 $Running = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*main.py*" }
 if (-not $Running) {
     Write-Host "Starting server in background..."
+    
+    # Ensure VBScript uses correct working directory
     $VbsScript = @"
 Set WshShell = CreateObject("WScript.Shell")
+WshShell.CurrentDirectory = "$ScriptPath"
 WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
 "@
     $VbsFile = Join-Path $ScriptPath "start_server_hidden_temp.vbs"
@@ -240,7 +259,7 @@ WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
         Write-Warning "Server failed to start or is taking too long."
         Write-Warning "Checking server.log..."
         if (Test-Path "server.log") {
-            Get-Content "server.log" -Tail 10
+            Get-Content "server.log" -Tail 20
         } else {
             Write-Warning "server.log not found."
         }
@@ -248,7 +267,10 @@ WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
         
         # Run directly in current console to see output
         try {
+            # Explicitly set working directory for the process
+            Push-Location $ScriptPath
             & $PythonPath $MainScript
+            Pop-Location
         } catch {
             Write-Error "Failed to run python script: $_"
         }

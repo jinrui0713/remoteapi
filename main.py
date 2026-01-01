@@ -2,12 +2,15 @@ import os
 import sys
 import logging
 
-# Configure logging immediately to capture import errors
+# Configure logging to both file and console
+handlers = [logging.FileHandler('server.log'), logging.StreamHandler(sys.stdout)]
 logging.basicConfig(
-    filename='server.log',
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=handlers
 )
+
+logging.info("Starting server initialization...")
 
 try:
     from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -23,6 +26,7 @@ try:
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
     from typing import Dict, List, Optional
+    logging.info("Dependencies imported successfully.")
 except Exception as e:
     logging.critical(f"Failed to import dependencies: {e}")
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
@@ -263,6 +267,8 @@ if __name__ == "__main__":
     if sys.stderr is None:
         sys.stderr = open(os.devnull, 'w')
 
+    logging.info("Starting uvicorn server...")
+    
     # IP Display Logic
     try:
         hostname = socket.gethostname()
@@ -271,6 +277,11 @@ if __name__ == "__main__":
     except:
         pass
 
-    # log_config=None prevents uvicorn from using its default config which fails without a console
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_config=None)
+    try:
+        # log_config=None prevents uvicorn from using its default config which fails without a console
+        uvicorn.run(app, host="0.0.0.0", port=8000, log_config=None)
+    except Exception as e:
+        logging.critical(f"Failed to start uvicorn: {e}")
+        print(f"CRITICAL ERROR: Failed to start uvicorn: {e}")
+        sys.exit(1)
 
