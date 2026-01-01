@@ -112,6 +112,32 @@ Write-Host "Installing requirements..."
 & ".\venv\Scripts\python.exe" -m pip install --upgrade pip
 & ".\venv\Scripts\python.exe" -m pip install -r requirements.txt
 
+# --- Build Exe ---
+Write-Host "`n=== Building Executable ===" -ForegroundColor Cyan
+$ExeName = "YtDlpApiServer.exe"
+$ExePath = Join-Path $AppDataDir $ExeName
+
+if (-not (Test-Path $ExePath)) {
+    Write-Host "Building exe with PyInstaller..."
+    & ".\venv\Scripts\pyinstaller.exe" --onefile --name YtDlpApiServer --clean --distpath dist main.py
+    
+    Write-Host "Deploying exe to AppData..."
+    Copy-Item -Path "dist\$ExeName" -Destination $ExePath -Force
+} else {
+    Write-Host "Executable already exists in AppData. Skipping build." -ForegroundColor Green
+}
+
+# Deploy static files
+$StaticSrc = Join-Path $ScriptPath "static"
+$StaticDest = Join-Path $AppDataDir "static"
+if (Test-Path $StaticSrc) {
+    Write-Host "Deploying static files..."
+    if (-not (Test-Path $StaticDest)) {
+        New-Item -ItemType Directory -Path $StaticDest -Force | Out-Null
+    }
+    Copy-Item -Path "$StaticSrc\*" -Destination $StaticDest -Recurse -Force
+}
+
 # --- FFmpeg Setup ---
 Write-Host "`n=== Setting up FFmpeg ===" -ForegroundColor Cyan
 $FFmpegExe = Join-Path $BinDir "ffmpeg.exe"
@@ -177,10 +203,14 @@ if (Test-Path $TokenFile) {
 Write-Host "`n=== Setting up Server Auto-Start ===" -ForegroundColor Cyan
 
 $TaskName = "YtDlpApiServer"
-$PythonPath = Join-Path $ScriptPath "venv\Scripts\python.exe"
-$MainScript = Join-Path $ScriptPath "main.py"
+$ExePath = Join-Path $AppDataDir "YtDlpApiServer.exe"
 
-$Action = New-ScheduledTaskAction -Execute $PythonPath -Argument $MainScript -WorkingDirectory $ScriptPath
+if (-not (Test-Path $ExePath)) {
+    Write-Error "Executable not found at $ExePath"
+    exit
+}
+
+$Action = New-ScheduledTaskAction -Execute $ExePath -WorkingDirectory $AppDataDir
 $Trigger = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -Hidden
@@ -209,31 +239,16 @@ try {
 # --- Start Server Now ---
 Write-Host "`n=== Starting Server Now ===" -ForegroundColor Cyan
 
-# Verify Python works
-Write-Host "Verifying Python environment..."
-try {
-    $TestOutput = & $PythonPath -c "print('Python OK')" 2>&1
-    if ($TestOutput -match "Python OK") {
-        Write-Host "Python check passed." -ForegroundColor Green
-    } else {
-        Write-Error "Python check failed. Output: $TestOutput"
-        exit
-    }
-} catch {
-    Write-Error "Failed to execute Python: $_"
-    exit
-}
-
 # Check if already running
-$Running = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*main.py*" }
+$Running = Get-Process -Name "YtDlpApiServer" -ErrorAction SilentlyContinue
 if (-not $Running) {
     Write-Host "Starting server in background..."
     
     # Ensure VBScript uses correct working directory
     $VbsScript = @"
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "$ScriptPath"
-WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
+WshShell.CurrentDirectory = "$AppDataDir"
+WshShell.Run """$ExePath""", 0, False
 "@
     $VbsFile = Join-Path $ScriptPath "start_server_hidden_temp.vbs"
     Set-Content -Path $VbsFile -Value $VbsScript
@@ -261,22 +276,23 @@ WshShell.Run """$PythonPath"" ""$MainScript""", 0, False
     } else {
         Write-Host " Failed." -ForegroundColor Red
         Write-Warning "Server failed to start or is taking too long."
-        Write-Warning "Checking server.log..."
-        if (Test-Path "server.log") {
-            Get-Content "server.log" -Tail 20
+        Write-Warning "Checking server.log in AppData..."
+        $LogFile = Join-Path $AppDataDir "server.log"
+        if (Test-Path $LogFile) {
+            Get-Content $LogFile -Tail 20
         } else {
-            Write-Warning "server.log not found."
+            Write-Warning "server.log not found at $LogFile"
         }
         Write-Host "Trying to start visibly for debugging..."
         
         # Run directly in current console to see output
         try {
             # Explicitly set working directory for the process
-            Push-Location $ScriptPath
-            & $PythonPath $MainScript
+            Push-Location $AppDataDir
+            & $ExePath
             Pop-Location
         } catch {
-            Write-Error "Failed to run python script: $_"
+            Write-Error "Failed to run exe: $_"
         }
     }
 
