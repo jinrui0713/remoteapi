@@ -83,8 +83,12 @@ class InstallerApp(tk.Tk):
         lbl_status = ttk.Label(main_frame, textvariable=self.status_msg, foreground="blue")
         lbl_status.pack(pady=(0, 10))
         
-        btn_install = ttk.Button(main_frame, text="Install", command=self.start_install)
-        btn_install.pack(fill=tk.X, ipady=5)
+        # Make the button larger and easier to click
+        style = ttk.Style()
+        style.configure('Big.TButton', font=('Segoe UI', 12, 'bold'))
+        
+        btn_install = ttk.Button(main_frame, text="INSTALL NOW", command=self.start_install, style='Big.TButton')
+        btn_install.pack(fill=tk.X, ipady=10, pady=10)
 
     def browse_dir(self):
         d = filedialog.askdirectory(initialdir=self.install_dir.get())
@@ -92,12 +96,7 @@ class InstallerApp(tk.Tk):
             self.install_dir.set(d)
 
     def start_install(self):
-        if not is_admin():
-            if messagebox.askyesno("Admin Rights Required", "Installation requires Administrator privileges. Restart as Admin?"):
-                run_as_admin()
-                sys.exit()
-            return
-
+        # Admin check is now done at startup
         self.status_msg.set("Installing...")
         self.update()
         
@@ -200,5 +199,10 @@ class InstallerApp(tk.Tk):
                 f.write(f"[InternetShortcut]\nURL=http://localhost:{port}\nIconIndex=0\nIconFile={exe_path}\n")
 
 if __name__ == "__main__":
+    if not is_admin():
+        # Re-run the program with admin rights
+        run_as_admin()
+        sys.exit()
+        
     app = InstallerApp()
     app.mainloop()
