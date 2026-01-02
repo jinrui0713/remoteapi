@@ -8,95 +8,78 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         :root {
-            --glass-bg: rgba(255, 255, 255, 0.65);
-            --glass-border: rgba(255, 255, 255, 0.5);
-            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --glass-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            --primary-gradient: #2c3e50;
         }
 
         body {
-            background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);
-            background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
+            background: #f8f9fa;
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            color: #2c3e50;
-        }
-
-        @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            color: #333;
         }
 
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border-radius: 20px;
+            border-radius: 12px;
             border: 1px solid var(--glass-border);
             box-shadow: var(--glass-shadow);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .glass-panel:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.2);
         }
 
         .glass-header {
-            background: rgba(255, 255, 255, 0.4);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 20px 20px 0 0;
+            background: rgba(0, 0, 0, 0.03);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 12px 12px 0 0;
             padding: 1rem 1.5rem;
         }
 
         .btn-glass {
-            background: rgba(255, 255, 255, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.6);
-            backdrop-filter: blur(4px);
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
             color: #333;
-            border-radius: 12px;
+            border-radius: 8px;
             transition: all 0.2s;
         }
 
         .btn-glass:hover {
-            background: rgba(255, 255, 255, 0.8);
-            transform: translateY(-1px);
+            background: #fff;
+            border-color: #999;
         }
 
         .btn-primary-glass {
             background: var(--primary-gradient);
             border: none;
             color: white;
-            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
         .btn-primary-glass:hover {
             opacity: 0.9;
-            transform: translateY(-1px);
             color: white;
         }
 
         .table-glass {
             --bs-table-bg: transparent;
-            --bs-table-hover-bg: rgba(255, 255, 255, 0.3);
+            --bs-table-hover-bg: rgba(0, 0, 0, 0.02);
         }
 
         .status-badge {
             border-radius: 30px;
             padding: 0.5em 1em;
             font-weight: 500;
-            backdrop-filter: blur(4px);
         }
 
         /* Modal Glass */
         .modal-content {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 24px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
         }
         
         .modal-header {
@@ -109,30 +92,28 @@
 
         /* Dark Mode for Video/Proxy Modals */
         .modal-dark .modal-content {
-            background: rgba(30, 30, 30, 0.9);
+            background: #222;
             color: white;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid #444;
         }
         .modal-dark .modal-header {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid #444;
         }
         .modal-dark .form-control {
-            background: rgba(0, 0, 0, 0.3);
-            border-color: rgba(255, 255, 255, 0.2);
+            background: #333;
+            border-color: #555;
             color: white;
         }
 
         .form-control, .form-select {
-            background: rgba(255, 255, 255, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            border-radius: 12px;
-            backdrop-filter: blur(4px);
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
         }
         
         .form-control:focus, .form-select:focus {
-            background: rgba(255, 255, 255, 0.8);
-            box-shadow: 0 0 0 4px rgba(118, 75, 162, 0.1);
-            border-color: #764ba2;
+            border-color: #2c3e50;
+            box-shadow: 0 0 0 0.25rem rgba(44, 62, 80, 0.25);
         }
 
         /* Animations */
@@ -154,7 +135,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
-                    <small class="text-muted">v6.0.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v6.0.1 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -514,7 +495,12 @@
             data() {
                 return {
                     form: {
-                        url: '',
+                        url: '',-if="adminError">
+                        <div class="text-danger mb-3"><i class="bi bi-exclamation-triangle fs-1"></i></div>
+                        <p class="text-danger">{{ adminError }}</p>
+                        <button class="btn btn-sm btn-outline-secondary" @click="fetchAdminStats">Retry</button>
+                    </div>
+                    <div class="modal-body text-center" v-else
                         type: 'video',
                         quality: '720',
                         audio_format: 'mp3',
@@ -537,7 +523,8 @@
                     modalInstance: null,
                     serverModalInstance: null,
                     proxyModalInstance: null,
-                    adminModalInstance: null,
+                    adminModalInstan,
+                    adminError: nullce: null,
                     
                     activeClientCount: 0,
                     proxyUrl: '',
@@ -630,39 +617,55 @@
                 },
                 async openAdminStats() {
                     const modal = this.getModal('adminModal');
-                    if (modal) {
-                        modal.show();
-                        this.fetchAdminStats();
-                    }
-                },
-                async fetchAdminStats() {
+                    ihis.adminError = null;
                     try {
                         const res = await axios.get('/api/admin/stats');
                         this.adminStats = res.data;
                     } catch (e) {
                         console.error(e);
                         this.adminStats = null;
+                        this.adminError = "Failed to load stats. " + (e.response?.data?.detail || e.message);
                     }
                 },
                 async proxyGo() {
                     if (!this.proxyUrl) return;
+                    
+                    // Open window immediately to bypass popup blocker
+                    const targetName = 'proxy_' + Date.now();
+                    const newWindow = window.open('about:blank', targetName);
+                    
+                    if (!newWindow) {
+                        alert('Popup blocked! Please allow popups for this site.');
+                        return;
+                    }
+                    
+                    // Show loading in the new window
+                    newWindow.document.write('<html><head><title>Connecting...</title><style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;background:#222;color:#fff;}</style></head><body><h3>Connecting to Secure Proxy...</h3></body></html>');
+
                     try {
                         const res = await axios.post('/api/proxy/encrypt', { url: this.proxyUrl });
-                        const encryptedUrl = res.data.payload; // Fixed: API returns 'payload' not 'encrypted_url'
+                        const encryptedUrl = res.data.payload;
                         
                         const form = document.createElement('form');
                         form.method = 'POST';
                         form.action = '/proxy';
-                        form.target = '_blank';
+                        form.target = targetName;
                         
                         const input = document.createElement('input');
                         input.type = 'hidden';
-                        input.name = 'payload'; // Fixed: API expects 'payload'
+                        input.name = 'payload';
                         input.value = encryptedUrl;
                         
                         form.appendChild(input);
                         document.body.appendChild(form);
                         form.submit();
+                        document.body.removeChild(form);
+                        
+                        const modal = this.getModal('proxyModal');
+                        if (modal) modal.hide();
+                        this.proxyUrl = '';
+                    } catch (e) {
+                        newWindow.close();it();
                         document.body.removeChild(form);
                         
                         const modal = this.getModal('proxyModal');

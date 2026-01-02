@@ -100,4 +100,4 @@ echo.
 echo Run Setup.exe to install the server.
 echo ========================================================
 echo.
-pause
+rem pause
