@@ -72,9 +72,26 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 # --- Auth & Stats ---
 AUTH_COOKIE_NAME = "ytdlp_auth"
-ADMIN_TOKEN = secrets.token_urlsafe(16) # Generate random admin token on startup if not persisted
-# In a real app, persist this or allow setting via env var
-logging.info(f"ADMIN TOKEN (for first login): {ADMIN_TOKEN}")
+
+# Load or Generate Admin Token
+TOKEN_FILE = os.path.join(execution_dir, "admin_token.txt")
+if os.path.exists(TOKEN_FILE):
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            ADMIN_TOKEN = f.read().strip()
+    except Exception as e:
+        logging.error(f"Failed to read token file: {e}")
+        ADMIN_TOKEN = secrets.token_urlsafe(16)
+else:
+    ADMIN_TOKEN = secrets.token_urlsafe(16)
+    try:
+        with open(TOKEN_FILE, "w") as f:
+            f.write(ADMIN_TOKEN)
+    except Exception as e:
+        logging.error(f"Failed to write token file: {e}")
+
+logging.info(f"ADMIN TOKEN: {ADMIN_TOKEN}")
+logging.info(f"Token file: {TOKEN_FILE}")
 
 # Session Store (Simple in-memory)
 # Token -> {exp: timestamp, ip: str, ua_hash: str}
