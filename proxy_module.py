@@ -153,6 +153,6 @@ class ProxyService:
             await asyncio.sleep(expected_time)
         
         # Log bandwidth after stream finishes (or periodically if needed, but this is simpler)
-        db_utils.log_bandwidth(client_ip, size, 0, "proxy")
+        db_utils.log_bandwidth(client_ip, total_bytes, 0, "proxy")
 
 proxy_service = ProxyService()

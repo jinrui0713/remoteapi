@@ -41,7 +41,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="6.0.6")
+app = FastAPI(title="yt-dlp API Server", version="6.0.7")
 
 # CORS設定
 app.add_middleware(
@@ -495,21 +495,6 @@ async def login(req: LoginRequest, response: Response, request: Request):
     else:
         db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-            "ip": "unknown", # Will be updated on first request
-            "ua_hash": "unknown",
-            "role": "admin" if req.username == "admin" else "user"
-        }
-        
-        response.set_cookie(
-            key=AUTH_COOKIE_NAME,
-            value=session_token,
-            httponly=True,
-            secure=False, # Set True if HTTPS is guaranteed
-            max_age=12 * 3600
-        )
-        return {"message": "Logged in"}
-    else:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.get("/api/admin/stats")
 async def admin_stats(request: Request):
@@ -613,7 +598,7 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         # Rewrite HTML if content type is html
         content_type = resp.headers.get("content-type", "")
         if "text/html" in content_type:
-            content = await resp.read()
+            content = await resp.aread()
             # Log bandwidth for non-streamed content
             db_utils.log_bandwidth(client_ip, len(content), 0, "proxy")
             
