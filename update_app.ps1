@@ -1,11 +1,16 @@
 # update_app.ps1
 
-# Check for Administrator privileges
+# Check for Administrator privileges and self-elevate
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Write-Warning "This script must be run as Administrator."
-    Write-Host "Please right-click and select 'Run as administrator'." -ForegroundColor Yellow
-    Pause
-    exit
+    Write-Warning "Not running as Administrator. Attempting to elevate..."
+    try {
+        Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+        exit
+    } catch {
+        Write-Error "Failed to elevate privileges. Please run as Administrator."
+        Pause
+        exit
+    }
 }
 
 $ErrorActionPreference = "Stop"
@@ -52,8 +57,19 @@ if (Test-Path ".git") {
 # 2. Stop Server
 Write-Host "`n[2/4] Stopping running services..."
 try {
+    # Try to stop by PID first
+    if (Test-Path "server.pid") {
+        $PidContent = Get-Content "server.pid"
+        if ($PidContent -match "^\d+$") {
+            $ServerPid = [int]$PidContent
+            Write-Host "Found PID file: $ServerPid"
+            Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue
+            Write-Host "Stopped server process (PID: $ServerPid)."
+        }
+    }
+
     Stop-Process -Name "YtDlpApiServer" -Force -ErrorAction SilentlyContinue
-    Write-Host "Stopped YtDlpApiServer."
+    Write-Host "Stopped YtDlpApiServer task/process."
     
     Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
     Write-Host "Stopped cloudflared."
@@ -89,3 +105,5 @@ try {
 
 Write-Host "`n=== Update Complete ===" -ForegroundColor Cyan
 Stop-Transcript
+Write-Host "Press any key to close..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

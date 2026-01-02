@@ -684,6 +684,13 @@ if __name__ == "__main__":
 
     logging.info(f"Starting uvicorn server on port {args.port}...")
     
+    # Write PID file
+    try:
+        with open("server.pid", "w") as f:
+            f.write(str(os.getpid()))
+    except Exception as e:
+        logging.error(f"Failed to write PID file: {e}")
+
     # IP Display Logic
     try:
         hostname = socket.gethostname()
