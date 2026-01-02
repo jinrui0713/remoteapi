@@ -23,6 +23,9 @@
                 <button class="btn btn-outline-dark" @click="showProxyModal">
                     Secure Proxy
                 </button>
+                <button class="btn btn-outline-danger" v-if="userRole === 'admin'" @click="openAdminStats">
+                    Admin
+                </button>
                 <button class="btn btn-outline-secondary" @click="$refs.cookieInput.click()" :disabled="uploadingCookies">
                     {{ uploadingCookies ? 'Uploading...' : 'Upload Cookies' }}
                 </button>
@@ -31,6 +34,9 @@
                 <button class="btn btn-outline-secondary" @click="updateSystem" :disabled="updating">
                     <span v-if="updating" class="spinner-border spinner-border-sm me-2"></span>
                     {{ updating ? 'Updating...' : 'Check for Updates' }}
+                </button>
+                <button class="btn btn-outline-secondary" @click="logout">
+                    Logout
                 </button>
             </div>
         </div>
@@ -339,7 +345,8 @@
                     serverModalInstance: null,
                     proxyModalInstance: null,
                     activeClientCount: 0,
-                    proxyUrl: ''
+                    proxyUrl: '',
+                    userRole: ''
                 }
             },
             methods: {
@@ -398,10 +405,33 @@
                     this.serverModalInstance.show();
                 },
                 showProxyModal() {
+                    console.log("Opening Proxy Modal");
                     if (!this.proxyModalInstance) {
-                        this.proxyModalInstance = new bootstrap.Modal(this.$refs.proxyModal);
+                        const el = this.$refs.proxyModal;
+                        if (el) {
+                            this.proxyModalInstance = new bootstrap.Modal(el);
+                        } else {
+                            console.error("Proxy Modal element not found");
+                            return;
+                        }
                     }
                     this.proxyModalInstance.show();
+                },
+                async logout() {
+                    try {
+                        await axios.post('/api/logout');
+                        window.location.href = '/static/login.html';
+                    } catch (e) {
+                        alert('Logout failed');
+                    }
+                },
+                async openAdminStats() {
+                    try {
+                        const res = await axios.get('/api/admin/stats');
+                        alert(JSON.stringify(res.data, null, 2));
+                    } catch (e) {
+                        alert('Failed to fetch stats: ' + (e.response?.data?.detail || e.message));
+                    }
                 },
                 async proxyGo() {
                     if (!this.proxyUrl) return;
@@ -453,6 +483,7 @@
                             
                             if (s.url === '/') {
                                 this.activeClientCount = res.data.active_clients || 0;
+                                this.userRole = res.data.role || 'guest';
                             }
                         } catch (e) {
                             s.status = 'offline';

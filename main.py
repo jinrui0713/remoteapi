@@ -594,16 +594,29 @@ async def get_info(url: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/system/info")
-async def system_info():
+async def system_info(request: Request):
     """Get system status and load info"""
     active_jobs = len([j for j in jobs.values() if j.status in [JobStatus.QUEUED, JobStatus.DOWNLOADING]])
+    
+    # Determine role
+    role = "guest"
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if token and token in sessions:
+        role = sessions[token].get("role", "user")
+
     return {
         "hostname": socket.gethostname(),
         "active_jobs": active_jobs,
         "active_clients": get_active_client_count(),
         "platform": sys.platform,
-        "version": app.version
+        "version": app.version,
+        "role": role
     }
+
+@app.post("/api/logout")
+async def logout(response: Response):
+    response.delete_cookie(AUTH_COOKIE_NAME)
+    return {"message": "Logged out"}
 
 @app.post("/system/cookies")
 async def upload_cookies(file: UploadFile = File(...)):
