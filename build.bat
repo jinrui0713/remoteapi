@@ -65,6 +65,8 @@ move "ffmpeg_temp\bin\cloudflared.exe" release\
 xcopy /E /I static release\static
 copy start_public_hidden.vbs release\
 copy show_public_url.ps1 release\
+copy update_app.ps1 release\
+copy setup_full.ps1 release\
 
 REM Cleanup intermediate files to save space
 rmdir /s /q ffmpeg_temp
@@ -82,6 +84,8 @@ pyinstaller --onefile --name Setup --clean --noconsole ^
     --add-data "release\cloudflared.exe;." ^
     --add-data "release\start_public_hidden.vbs;." ^
     --add-data "release\show_public_url.ps1;." ^
+    --add-data "release\update_app.ps1;." ^
+    --add-data "release\setup_full.ps1;." ^
     --add-data "release\static;static" ^
     installer.py
 

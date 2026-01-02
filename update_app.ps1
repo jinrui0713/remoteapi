@@ -50,8 +50,26 @@ if (Test-Path ".git") {
         }
     }
 } else {
-    Write-Warning "Not a git repository (ZIP download?). Skipping download step."
-    Write-Host "To enable auto-updates, please clone the repository using git."
+    Write-Host "Not a git repository. Attempting Binary Update..." -ForegroundColor Cyan
+    
+    $LatestReleaseUrl = "https://github.com/jinrui0713/remoteapi/releases/latest/download/Setup.exe"
+    $InstallerPath = Join-Path $env:TEMP "YtDlpServer_Setup.exe"
+    
+    try {
+        Write-Host "Downloading latest installer..."
+        Invoke-WebRequest -Uri $LatestReleaseUrl -OutFile $InstallerPath
+        
+        Write-Host "Starting installer..."
+        # Run installer and exit this script
+        Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Verb RunAs
+        
+        Write-Host "Installer started. This window will close."
+        Stop-Transcript
+        exit
+    } catch {
+        Write-Error "Failed to download or run installer: $_"
+        Write-Host "Please download the latest release manually from GitHub."
+    }
 }
 
 # 2. Stop Server

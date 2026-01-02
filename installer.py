@@ -140,7 +140,9 @@ class InstallerApp(tk.Tk):
             'ffprobe.exe',
             'cloudflared.exe',
             'start_public_hidden.vbs',
-            'show_public_url.ps1'
+            'show_public_url.ps1',
+            'update_app.ps1',
+            'setup_full.ps1'
         ]
         
         for f in files_to_copy:
