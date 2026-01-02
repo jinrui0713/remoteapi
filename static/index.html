@@ -154,6 +154,45 @@
             color: #fff !important;
         }
 
+        /* Admin Modal Dark Mode Fixes */
+        [data-theme="dark"] .bg-light {
+            background-color: rgba(255, 255, 255, 0.05) !important;
+            color: var(--text-color);
+            border-color: var(--glass-border) !important;
+        }
+        
+        [data-theme="dark"] .table-bordered {
+            border-color: var(--glass-border);
+        }
+        
+        [data-theme="dark"] .table-bordered td, 
+        [data-theme="dark"] .table-bordered th {
+            border-color: var(--glass-border);
+        }
+
+        [data-theme="dark"] .list-group-item {
+            background-color: transparent;
+            color: var(--text-color);
+            border-color: var(--glass-border);
+        }
+
+        /* Nav Tabs for Admin */
+        .nav-tabs .nav-link {
+            color: var(--text-color);
+            border: none;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-tabs .nav-link.active {
+            color: var(--bs-primary);
+            background: transparent;
+            border-bottom: 2px solid var(--bs-primary);
+            font-weight: bold;
+        }
+        .nav-tabs .nav-link:hover {
+            border-color: transparent;
+            color: var(--bs-primary);
+        }
+
         /* Dark Mode for Video/Proxy Modals */
         .modal-dark .modal-content {
             background: #222;
@@ -519,57 +558,150 @@
 
         <!-- Admin Modal -->
         <div class="modal fade" id="adminModal" tabindex="-1" ref="adminModal">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title fw-bold"><i class="bi bi-speedometer2 me-2"></i>Admin Dashboard</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body" v-if="adminStats">
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <div class="p-3 rounded-3 bg-light border text-center">
-                                    <div class="text-muted small text-uppercase fw-bold">Active Clients</div>
-                                    <div class="fs-2 fw-bold text-primary">{{ adminStats.active_clients }}</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="p-3 rounded-3 bg-light border text-center">
-                                    <div class="text-muted small text-uppercase fw-bold">Total Sessions</div>
-                                    <div class="fs-2 fw-bold text-success">{{ adminStats.sessions }}</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="p-3 rounded-3 bg-light border text-center">
-                                    <div class="text-muted small text-uppercase fw-bold">Disk Usage</div>
-                                    <div class="fs-5 fw-bold text-info" v-if="adminStats.disk_usage">
-                                        {{ Math.round(adminStats.disk_usage.used / (1024**3)) }}GB / {{ Math.round(adminStats.disk_usage.total / (1024**3)) }}GB
+                        
+                        <ul class="nav nav-tabs mb-4">
+                            <li class="nav-item">
+                                <a class="nav-link" :class="{active: adminTab === 'overview'}" href="#" @click.prevent="adminTab = 'overview'">Overview</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" :class="{active: adminTab === 'logs'}" href="#" @click.prevent="adminTab = 'logs'">Logs</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" :class="{active: adminTab === 'ip'}" href="#" @click.prevent="adminTab = 'ip'">IP Manager</a>
+                            </li>
+                        </ul>
+
+                        <!-- Overview Tab -->
+                        <div v-if="adminTab === 'overview'">
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-3">
+                                    <div class="p-3 rounded-3 bg-light border text-center h-100">
+                                        <div class="text-muted small text-uppercase fw-bold">Active Clients</div>
+                                        <div class="fs-2 fw-bold text-primary">{{ adminStats.active_clients }}</div>
                                     </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-3 rounded-3 bg-light border text-center h-100">
+                                        <div class="text-muted small text-uppercase fw-bold">Total Sessions</div>
+                                        <div class="fs-2 fw-bold text-success">{{ adminStats.sessions }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-3 rounded-3 bg-light border text-center h-100">
+                                        <div class="text-muted small text-uppercase fw-bold">Disk Usage</div>
+                                        <div class="fs-5 fw-bold text-info" v-if="adminStats.disk_usage">
+                                            {{ Math.round(adminStats.disk_usage.used / (1024**3)) }}GB / {{ Math.round(adminStats.disk_usage.total / (1024**3)) }}GB
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-3 rounded-3 bg-light border text-center h-100">
+                                        <div class="text-muted small text-uppercase fw-bold">Bandwidth (Total)</div>
+                                        <div class="fs-5 fw-bold text-warning" v-if="adminStats.bandwidth">
+                                            <i class="bi bi-arrow-up"></i> {{ formatSize(adminStats.bandwidth.total_sent) }}<br>
+                                            <i class="bi bi-arrow-down"></i> {{ formatSize(adminStats.bandwidth.total_received) }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="fw-bold mb-3">System Information</h6>
+                                    <table class="table table-sm table-bordered" v-if="adminStats.system_info">
+                                        <tbody>
+                                            <tr><th class="bg-light w-25">Platform</th><td>{{ adminStats.system_info.platform }}</td></tr>
+                                            <tr><th class="bg-light">Python</th><td>{{ adminStats.system_info.python_version }}</td></tr>
+                                            <tr><th class="bg-light">CPU Cores</th><td>{{ adminStats.system_info.cpu_count }}</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="fw-bold mb-3">Top Bandwidth Users</h6>
+                                    <ul class="list-group" v-if="adminStats.bandwidth">
+                                        <li class="list-group-item d-flex justify-content-between" v-for="user in adminStats.bandwidth.top_ips" :key="user.ip">
+                                            <span class="font-monospace">{{ user.ip }}</span>
+                                            <span class="fw-bold">{{ formatSize(user.total) }}</span>
+                                        </li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
 
-                        <h6 class="fw-bold mb-3">System Information</h6>
-                        <table class="table table-sm table-bordered" v-if="adminStats.system_info">
-                            <tbody>
-                                <tr><th class="bg-light w-25">Platform</th><td>{{ adminStats.system_info.platform }}</td></tr>
-                                <tr><th class="bg-light">Python</th><td>{{ adminStats.system_info.python_version }}</td></tr>
-                                <tr><th class="bg-light">CPU Cores</th><td>{{ adminStats.system_info.cpu_count }}</td></tr>
-                            </tbody>
-                        </table>
+                        <!-- Logs Tab -->
+                        <div v-if="adminTab === 'logs'">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-hover table-bordered">
+                                    <thead class="bg-light sticky-top">
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>IP</th>
+                                            <th>Event</th>
+                                            <th>Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="log in adminStats.logs" :key="log.id">
+                                            <td class="small text-nowrap">{{ new Date(log.timestamp * 1000).toLocaleString() }}</td>
+                                            <td class="small font-monospace">{{ log.ip }}</td>
+                                            <td><span class="badge bg-secondary">{{ log.event_type }}</span></td>
+                                            <td class="small text-break">{{ log.details }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
 
-                        <h6 class="fw-bold mb-3 mt-4">Active Client IPs</h6>
-                        <ul class="list-group">
-                            <li class="list-group-item d-flex justify-content-between" v-for="(time, ip) in adminStats.clients_list" :key="ip">
-                                <span class="font-monospace">{{ ip }}</span>
-                                <span class="text-muted small">Last seen: {{ new Date(time * 1000).toLocaleTimeString() }}</span>
-                            </li>
-                        </ul>
+                        <!-- IP Manager Tab -->
+                        <div v-if="adminTab === 'ip'">
+                            <div class="mb-3">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" v-model="blockIpTarget" placeholder="IP Address to Block">
+                                    <input type="text" class="form-control" v-model="blockIpReason" placeholder="Reason (Optional)">
+                                    <button class="btn btn-danger" @click="blockIp">Block IP</button>
+                                </div>
+                            </div>
+                            
+                            <h6 class="fw-bold">Blocked IPs</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>IP</th>
+                                            <th>Reason</th>
+                                            <th>Date</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="b in adminStats.blocked_ips" :key="b.ip">
+                                            <td class="font-monospace">{{ b.ip }}</td>
+                                            <td>{{ b.reason }}</td>
+                                            <td>{{ new Date(b.timestamp * 1000).toLocaleString() }}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-success" @click="unblockIp(b.ip)">Unblock</button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="!adminStats.blocked_ips || adminStats.blocked_ips.length === 0">
+                                            <td colspan="4" class="text-center text-muted">No blocked IPs</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                     <div class="modal-body text-center" v-else-if="adminError">
                         <div class="text-danger mb-3"><i class="bi bi-exclamation-triangle fs-1"></i></div>
                         <p class="text-danger">{{ adminError }}</p>
-                        <button class="btn btn-sm btn-outline-secondary" @click="fetchAdminStats">Retry</button>
+                        <button class="btn btn-sm btn-outline-secondary" @click="openAdminStats">Retry</button>
                     </div>
                     <div class="modal-body text-center" v-else>
                         <div class="spinner-border text-primary" role="status"></div>
@@ -621,6 +753,9 @@
                     userRole: '',
                     adminStats: null,
                     adminError: null,
+                    adminTab: 'overview',
+                    blockIpTarget: '',
+                    blockIpReason: '',
                     theme: 'light'
                 }
             },
@@ -723,6 +858,34 @@
                         console.error(e);
                         this.adminStats = null;
                         this.adminError = "Failed to load stats. " + (e.response?.data?.detail || e.message);
+                    }
+                },
+                async blockIp() {
+                    if (!this.blockIpTarget) return;
+                    if (!confirm(`Block IP ${this.blockIpTarget}?`)) return;
+                    try {
+                        await axios.post('/api/admin/block_ip', {
+                            ip: this.blockIpTarget,
+                            reason: this.blockIpReason || 'Manual block'
+                        });
+                        this.blockIpTarget = '';
+                        this.blockIpReason = '';
+                        // Refresh stats
+                        const res = await axios.get('/api/admin/stats');
+                        this.adminStats = res.data;
+                    } catch (e) {
+                        alert('Failed to block IP: ' + (e.response?.data?.detail || e.message));
+                    }
+                },
+                async unblockIp(ip) {
+                    if (!confirm(`Unblock IP ${ip}?`)) return;
+                    try {
+                        await axios.post('/api/admin/unblock_ip', { ip: ip });
+                        // Refresh stats
+                        const res = await axios.get('/api/admin/stats');
+                        this.adminStats = res.data;
+                    } catch (e) {
+                        alert('Failed to unblock IP: ' + (e.response?.data?.detail || e.message));
                     }
                 },
                 async proxyGo() {

@@ -27,6 +27,10 @@ try:
     import secrets
     from concurrent.futures import ThreadPoolExecutor
     from typing import Dict, List, Optional
+    import db_utils
+    
+    # Initialize DB
+    db_utils.init_db()
     
     # Import Proxy Module
     from proxy_module import proxy_service
@@ -37,7 +41,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="6.0.2")
+app = FastAPI(title="yt-dlp API Server", version="6.0.6")
 
 # CORS設定
 app.add_middleware(
@@ -124,8 +128,13 @@ async def auth_and_limit_middleware(request: Request, call_next):
         # If page request, redirect to login
         return RedirectResponse("/static/login.html")
 
-    # Check Load Limit (for new sessions or heavy endpoints)
     client_ip = request.client.host
+    
+    # Check Blocked IP
+    if db_utils.is_ip_blocked(client_ip):
+        return JSONResponse(status_code=403, content={"detail": "Access Denied: Your IP is blocked."})
+
+    # Check Load Limit (for new sessions or heavy endpoints)
     active_clients[client_ip] = time.time()
     
     if get_active_client_count() > MAX_CLIENTS:
@@ -463,12 +472,29 @@ class LoginRequest(BaseModel):
     password: str
 
 @app.post("/api/login")
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest, response: Response, request: Request):
     if req.username in USERS and USERS[req.username] == req.password:
         # Create session
         session_token = secrets.token_urlsafe(32)
         sessions[session_token] = {
             "exp": time.time() + (12 * 3600), # 12 hours
+            "role": "admin" if req.username == "admin" else "user",
+            "ip": request.client.host
+        }
+        
+        db_utils.log_event(request.client.host, "LOGIN", f"User: {req.username}")
+        
+        response.set_cookie(
+            key=AUTH_COOKIE_NAME,
+            value=session_token,
+            httponly=True,
+            secure=False, # Set True if HTTPS is guaranteed
+            max_age=12 * 3600
+        )
+        return {"message": "Logged in"}
+    else:
+        db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
             "ip": "unknown", # Will be updated on first request
             "ua_hash": "unknown",
             "role": "admin" if req.username == "admin" else "user"
@@ -506,6 +532,11 @@ async def admin_stats(request: Request):
         # Safe copy of active clients
         current_clients = active_clients.copy()
         
+        # Get Logs & Bandwidth
+        logs = db_utils.get_logs(limit=50)
+        bandwidth = db_utils.get_bandwidth_stats()
+        blocked_ips = db_utils.get_blocked_ips()
+
         return {
             "active_clients": get_active_client_count(),
             "sessions": len(sessions),
@@ -519,13 +550,40 @@ async def admin_stats(request: Request):
                 "platform": sys.platform,
                 "python_version": sys.version,
                 "cpu_count": os.cpu_count() or 1
-            }
+            },
+            "logs": logs,
+            "bandwidth": bandwidth,
+            "blocked_ips": blocked_ips
         }
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Admin stats error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+class BlockIPRequest(BaseModel):
+    ip: str
+    reason: str = ""
+
+@app.post("/api/admin/block_ip")
+async def block_ip_endpoint(req: BlockIPRequest, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    db_utils.block_ip(req.ip, req.reason)
+    db_utils.log_event(request.client.host, "BLOCK_IP", f"Blocked {req.ip}: {req.reason}")
+    return {"message": f"Blocked {req.ip}"}
+
+@app.post("/api/admin/unblock_ip")
+async def unblock_ip_endpoint(req: BlockIPRequest, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    db_utils.unblock_ip(req.ip)
+    db_utils.log_event(request.client.host, "UNBLOCK_IP", f"Unblocked {req.ip}")
+    return {"message": f"Unblocked {req.ip}"}
 
 # --- Proxy Endpoints ---
 
@@ -540,22 +598,31 @@ async def proxy_encrypt(req: ProxyEncryptRequest):
 @app.post("/proxy")
 async def proxy_handler(payload: str = Form(...), request: Request = None):
     try:
+        client_ip = request.client.host if request else "unknown"
+        
+        # Check Blocked IP
+        if db_utils.is_ip_blocked(client_ip):
+             return Response(content="Access Denied: Your IP is blocked.", status_code=403)
+
         data = proxy_service.decrypt_payload(payload)
         url = data['url']
         
         # Execute Proxy Request
-        resp = await proxy_service.proxy_request(url)
+        resp = await proxy_service.proxy_request(url, client_ip)
         
         # Rewrite HTML if content type is html
         content_type = resp.headers.get("content-type", "")
         if "text/html" in content_type:
             content = await resp.read()
+            # Log bandwidth for non-streamed content
+            db_utils.log_bandwidth(client_ip, len(content), 0, "proxy")
+            
             rewritten = proxy_service.rewrite_html(content, url)
             return Response(content=rewritten, media_type="text/html")
         else:
             # Stream other content with limit
             return StreamingResponse(
-                proxy_service.stream_response(resp),
+                proxy_service.stream_response(resp, client_ip),
                 media_type=content_type,
                 headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
             )
@@ -642,7 +709,12 @@ async def system_info(request: Request):
     }
 
 @app.post("/api/logout")
-async def logout(response: Response):
+async def logout(response: Response, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if token and token in sessions:
+        del sessions[token]
+    
+    db_utils.log_event(request.client.host, "LOGOUT", "")
     response.delete_cookie(AUTH_COOKIE_NAME)
     return {"message": "Logged out"}
 

@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 import httpx
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
+import db_utils
 
 # Configuration
 PROXY_KEY = secrets.token_bytes(32) # In production, this should be persistent
@@ -60,16 +61,19 @@ class ProxyService:
             logging.error(f"Decryption failed: {e}")
             raise HTTPException(status_code=400, detail="Invalid payload")
 
-    async def proxy_request(self, url: str):
+    async def proxy_request(self, url: str, client_ip: str = "unknown"):
         # Security checks
         if not (url.startswith("http://") or url.startswith("https://")):
-            raise HTTPException(status_code=400, detail="Invalid protocol")
+            # Try to fix protocol if missing (though frontend should handle this)
+            if not url.startswith("http"):
+                 url = "https://" + url
         
         # Basic localhost check (naive)
         if "localhost" in url or "127.0.0.1" in url:
              raise HTTPException(status_code=403, detail="Access denied")
 
         try:
+            db_utils.log_event(client_ip, "PROXY_ACCESS", url)
             req = self.client.build_request("GET", url)
             r = await self.client.send(req, stream=True)
             return r
@@ -137,13 +141,18 @@ class ProxyService:
             
         return str(soup)
 
-    async def stream_response(self, response: httpx.Response):
+    async def stream_response(self, response: httpx.Response, client_ip: str = "unknown"):
+        total_bytes = 0
         async for chunk in response.aiter_bytes(CHUNK_SIZE):
+            size = len(chunk)
+            total_bytes += size
             yield chunk
+            
             # Rate limiting
-            # Time to send chunk = Size / Speed
-            # Sleep = (Size / Speed) - ActualTime (negligible for simple calc)
-            expected_time = len(chunk) / MAX_SPEED_BPS
+            expected_time = size / MAX_SPEED_BPS
             await asyncio.sleep(expected_time)
+        
+        # Log bandwidth after stream finishes (or periodically if needed, but this is simpler)
+        db_utils.log_bandwidth(client_ip, size, 0, "proxy")
 
 proxy_service = ProxyService()
