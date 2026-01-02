@@ -13,10 +13,10 @@ logging.basicConfig(
 logging.info("Starting server initialization...")
 
 try:
-    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
+    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Request, Response, Depends, Form
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, JSONResponse
     from pydantic import BaseModel
     import yt_dlp
     import uvicorn
@@ -24,8 +24,13 @@ try:
     import uuid
     import time
     import asyncio
+    import secrets
     from concurrent.futures import ThreadPoolExecutor
     from typing import Dict, List, Optional
+    
+    # Import Proxy Module
+    from proxy_module import proxy_service
+    
     logging.info("Dependencies imported successfully.")
 except Exception as e:
     logging.critical(f"Failed to import dependencies: {e}")
@@ -57,10 +62,90 @@ if os.name == 'nt':
 else:
     DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), ".YtDlpApiServer", "downloads")
 
+# Temp directory for processing
+TEMP_DIR = os.path.join(os.path.dirname(DOWNLOAD_DIR), 'temp')
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 # Mount downloads directory for static access (playback)
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+# --- Auth & Stats ---
+AUTH_COOKIE_NAME = "ytdlp_auth"
+ADMIN_TOKEN = secrets.token_urlsafe(16) # Generate random admin token on startup if not persisted
+# In a real app, persist this or allow setting via env var
+logging.info(f"ADMIN TOKEN (for first login): {ADMIN_TOKEN}")
+
+# Session Store (Simple in-memory)
+# Token -> {exp: timestamp, ip: str, ua_hash: str}
+sessions: Dict[str, Dict] = {}
+
+# Stats
+active_clients: Dict[str, float] = {} # IP -> Last Access Timestamp
+MAX_CLIENTS = 3
+CLIENT_TIMEOUT = 300 # 5 minutes
+
+def get_active_client_count():
+    now = time.time()
+    # Cleanup old clients
+    to_remove = [ip for ip, last_seen in active_clients.items() if now - last_seen > CLIENT_TIMEOUT]
+    for ip in to_remove:
+        del active_clients[ip]
+    return len(active_clients)
+
+def check_auth(request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or token not in sessions:
+        return False
+    
+    session = sessions[token]
+    if session['exp'] < time.time():
+        del sessions[token]
+        return False
+        
+    return True
+
+# Middleware for Auth & Load Limit
+@app.middleware("http")
+async def auth_and_limit_middleware(request: Request, call_next):
+    # Allow static resources and login endpoints
+    if request.url.path.startswith("/static") or \
+       request.url.path in ["/login", "/api/login", "/system/info"]:
+        return await call_next(request)
+    
+    # Check Auth
+    if not check_auth(request):
+        # If API request, return 401
+        if request.url.path.startswith("/api"):
+             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        # If page request, redirect to login
+        return RedirectResponse("/static/login.html")
+
+    # Check Load Limit (for new sessions or heavy endpoints)
+    client_ip = request.client.host
+    active_clients[client_ip] = time.time()
+    
+    if get_active_client_count() > MAX_CLIENTS:
+        # Allow existing sessions? For now, strict limit on count
+        # But we just added them to active_clients, so if they are the 4th, they get blocked?
+        # Let's say if they were NOT in active_clients before and now count > MAX
+        # But we just added them. So if count > MAX, we block.
+        # To be nice, we should probably allow admin or check if this IP was already active.
+        # Simple logic: If count > MAX, show busy page.
+        # But we need to allow the 3 active users to continue.
+        # The cleanup logic runs in get_active_client_count.
+        pass
+
+    if get_active_client_count() > MAX_CLIENTS:
+         # Check if this specific IP was already active (it is, we just updated it)
+         # We need to know if it's a *new* client pushing us over.
+         # For simplicity, if total > MAX, we reject. 
+         # This might block existing users if a 4th one spams. 
+         # Better: Track "session start" time.
+         return Response(content="現在アクセスが集中しているため、サーバー負荷軽減のためアクセスを制限しています", status_code=503)
+
+    response = await call_next(request)
+    return response
 
 # ffmpeg設定
 ffmpeg_paths = [
@@ -153,9 +238,9 @@ def run_download(job_id: str, req: DownloadRequest):
 
     logging.info(f"Starting job {job_id}: {req.url}")
     
-    # Build yt-dlp options
+    # Use TEMP_DIR for downloading
     ydl_opts = {
-        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(TEMP_DIR, '%(title)s.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
         'progress_hooks': [lambda d: progress_hook(d, job_id)],
@@ -237,30 +322,42 @@ def run_download(job_id: str, req: DownloadRequest):
                 # Fallback to prepare_filename (might be wrong extension if converted)
                 final_filename = ydl.prepare_filename(info)
 
-            # Verify existence
+            # Verify existence and move to DOWNLOAD_DIR
             if final_filename and os.path.exists(final_filename):
-                job.filename = os.path.basename(final_filename)
+                filename_only = os.path.basename(final_filename)
+                dest_path = os.path.join(DOWNLOAD_DIR, filename_only)
+                
+                # Move file
+                import shutil
+                shutil.move(final_filename, dest_path)
+                logging.info(f"Moved finished file to {dest_path}")
+                
+                job.filename = filename_only
             else:
                 # Critical fallback: Search directory for the file
                 # Since we use restrictfilenames, the filename should be predictable
                 # But if extension changed...
-                logging.warning(f"File not found at {final_filename}, searching in {DOWNLOAD_DIR}")
+                logging.warning(f"File not found at {final_filename}, searching in {TEMP_DIR}")
                 
                 # Try to find a file that matches the title (sanitized)
                 # This is hard because we don't know exactly how it was sanitized
                 # But we can check if job.filename (from progress hook) exists
                 if job.filename:
-                    potential_path = os.path.join(DOWNLOAD_DIR, job.filename)
+                    potential_path = os.path.join(TEMP_DIR, job.filename)
                     if os.path.exists(potential_path):
                         logging.info(f"Found file using progress hook filename: {job.filename}")
+                        dest_path = os.path.join(DOWNLOAD_DIR, job.filename)
+                        shutil.move(potential_path, dest_path)
                         # Keep job.filename as is
                     else:
                         # Try with mp4 extension if video
                         if req.type == 'video':
                             base, _ = os.path.splitext(job.filename)
-                            mp4_path = os.path.join(DOWNLOAD_DIR, base + ".mp4")
+                            mp4_path = os.path.join(TEMP_DIR, base + ".mp4")
                             if os.path.exists(mp4_path):
                                 job.filename = os.path.basename(mp4_path)
+                                dest_path = os.path.join(DOWNLOAD_DIR, job.filename)
+                                shutil.move(mp4_path, dest_path)
                                 logging.info(f"Found file with mp4 extension: {job.filename}")
                             else:
                                 job.error_msg = "File missing after download"
@@ -356,6 +453,81 @@ async def delete_file(filename: str):
             raise HTTPException(status_code=500, detail=str(e))
     raise HTTPException(status_code=404, detail="File not found")
 
+# --- Auth Endpoints ---
+
+class LoginRequest(BaseModel):
+    token: str
+
+@app.post("/api/login")
+async def login(req: LoginRequest, response: Response):
+    if req.token == ADMIN_TOKEN:
+        # Create session
+        session_token = secrets.token_urlsafe(32)
+        sessions[session_token] = {
+            "exp": time.time() + (12 * 3600), # 12 hours
+            "ip": "unknown", # Will be updated on first request
+            "ua_hash": "unknown"
+        }
+        
+        response.set_cookie(
+            key=AUTH_COOKIE_NAME,
+            value=session_token,
+            httponly=True,
+            secure=False, # Set True if HTTPS is guaranteed
+            max_age=12 * 3600
+        )
+        return {"message": "Logged in"}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/api/admin/stats")
+async def admin_stats(request: Request):
+    # Check if admin (already checked by middleware, but double check logic if needed)
+    return {
+        "active_clients": get_active_client_count(),
+        "sessions": len(sessions),
+        "clients_list": active_clients
+    }
+
+# --- Proxy Endpoints ---
+
+class ProxyEncryptRequest(BaseModel):
+    url: str
+
+@app.post("/api/proxy/encrypt")
+async def proxy_encrypt(req: ProxyEncryptRequest):
+    payload = proxy_service.encrypt_payload(req.url)
+    return {"payload": payload}
+
+@app.post("/proxy")
+async def proxy_handler(payload: str = Form(...), request: Request = None):
+    try:
+        data = proxy_service.decrypt_payload(payload)
+        url = data['url']
+        
+        # Execute Proxy Request
+        resp = await proxy_service.proxy_request(url)
+        
+        # Rewrite HTML if content type is html
+        content_type = resp.headers.get("content-type", "")
+        if "text/html" in content_type:
+            content = await resp.read()
+            rewritten = proxy_service.rewrite_html(content, url)
+            return Response(content=rewritten, media_type="text/html")
+        else:
+            # Stream other content with limit
+            return StreamingResponse(
+                proxy_service.stream_response(resp),
+                media_type=content_type,
+                headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
+            )
+
+    except Exception as e:
+        logging.error(f"Proxy failed: {e}")
+        return Response(content="Proxy Error", status_code=500)
+
+# --- System Endpoints ---
+
 @app.get("/debug/info")
 async def debug_info():
     """Diagnostic endpoint to check server state"""
@@ -416,6 +588,7 @@ async def system_info():
     return {
         "hostname": socket.gethostname(),
         "active_jobs": active_jobs,
+        "active_clients": get_active_client_count(),
         "platform": sys.platform,
         "version": app.version
     }

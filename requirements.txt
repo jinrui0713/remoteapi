@@ -3,3 +3,6 @@ uvicorn
 yt-dlp
 pyinstaller
 python-multipart
+cryptography
+beautifulsoup4
+httpx
