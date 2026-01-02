@@ -135,6 +135,25 @@
             filter: invert(1) grayscale(100%) brightness(200%);
         }
 
+        /* Theme Aware Elements */
+        .bg-theme-icon {
+            background: white;
+            color: var(--bs-primary);
+        }
+        [data-theme="dark"] .bg-theme-icon {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff !important;
+        }
+        
+        [data-theme="dark"] .text-muted {
+            color: #adb5bd !important;
+        }
+        
+        [data-theme="dark"] .badge.bg-white {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: #fff !important;
+        }
+
         /* Dark Mode for Video/Proxy Modals */
         .modal-dark .modal-content {
             background: #222;
@@ -198,8 +217,8 @@
         <!-- Header -->
         <div class="glass-panel header-panel p-4 mb-4 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
             <div class="d-flex align-items-center gap-3">
-                <div class="bg-white p-2 rounded-circle shadow-sm">
-                    <i class="bi bi-cloud-download-fill text-primary fs-3"></i>
+                <div class="bg-theme-icon p-2 rounded-circle shadow-sm">
+                    <i class="bi bi-cloud-download-fill fs-3"></i>
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
@@ -393,7 +412,7 @@
                                 <tr v-for="file in files" :key="file.serverUrl + file.filename">
                                     <td class="ps-4">
                                         <div class="d-flex align-items-center">
-                                            <div class="bg-white p-2 rounded me-3 shadow-sm text-primary">
+                                            <div class="bg-theme-icon p-2 rounded me-3 shadow-sm">
                                                 <i class="bi bi-file-earmark-play-fill fs-5"></i>
                                             </div>
                                             <div>

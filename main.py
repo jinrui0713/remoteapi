@@ -487,32 +487,45 @@ async def login(req: LoginRequest, response: Response):
 
 @app.get("/api/admin/stats")
 async def admin_stats(request: Request):
-    # Check Auth & Role
-    token = request.cookies.get(AUTH_COOKIE_NAME)
-    if not token or token not in sessions:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    if sessions[token].get('role') != 'admin':
-        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        # Check Auth & Role
+        token = request.cookies.get(AUTH_COOKIE_NAME)
+        if not token or token not in sessions:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        if sessions[token].get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Get Disk Usage
-    total, used, free = shutil.disk_usage(DOWNLOAD_DIR)
-    
-    return {
-        "active_clients": get_active_client_count(),
-        "sessions": len(sessions),
-        "clients_list": active_clients,
-        "disk_usage": {
-            "total": total,
-            "used": used,
-            "free": free
-        },
-        "system_info": {
-            "platform": sys.platform,
-            "python_version": sys.version,
-            "cpu_count": os.cpu_count()
+        # Get Disk Usage
+        try:
+            total, used, free = shutil.disk_usage(DOWNLOAD_DIR)
+        except Exception as e:
+            logging.error(f"Disk usage check failed: {e}")
+            total, used, free = 0, 0, 0
+
+        # Safe copy of active clients
+        current_clients = active_clients.copy()
+        
+        return {
+            "active_clients": get_active_client_count(),
+            "sessions": len(sessions),
+            "clients_list": current_clients,
+            "disk_usage": {
+                "total": total,
+                "used": used,
+                "free": free
+            },
+            "system_info": {
+                "platform": sys.platform,
+                "python_version": sys.version,
+                "cpu_count": os.cpu_count() or 1
+            }
         }
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Admin stats error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 # --- Proxy Endpoints ---
 
@@ -547,9 +560,11 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
                 headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
             )
 
+    except HTTPException as he:
+        return Response(content=f"Proxy Error: {he.detail}", status_code=he.status_code)
     except Exception as e:
-        logging.error(f"Proxy failed: {e}")
-        return Response(content="Proxy Error", status_code=500)
+        logging.error(f"Proxy failed: {e}", exc_info=True)
+        return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500)
 
 # --- System Endpoints ---
 

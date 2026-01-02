@@ -20,7 +20,11 @@ CHUNK_SIZE = 64 * 1024 # 64KB
 class ProxyService:
     def __init__(self):
         self.aesgcm = AESGCM(PROXY_KEY)
-        self.client = httpx.AsyncClient(verify=False, follow_redirects=True)
+        self.client = httpx.AsyncClient(
+            verify=False, 
+            follow_redirects=True,
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        )
 
     def encrypt_payload(self, url: str, exp_seconds: int = 60) -> str:
         nonce = secrets.token_hex(8)
