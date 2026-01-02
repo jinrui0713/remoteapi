@@ -37,7 +37,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="2.0.0")
+app = FastAPI(title="yt-dlp API Server", version="6.0.0")
 
 # CORS設定
 app.add_middleware(
