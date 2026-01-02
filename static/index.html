@@ -5,98 +5,242 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yt-Dlp Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        .progress { height: 25px; }
-        .status-badge { width: 100px; }
-        .action-btn-group { min-width: 160px; }
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        body {
+            background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #2c3e50;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .glass-panel:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.2);
+        }
+
+        .glass-header {
+            background: rgba(255, 255, 255, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px 20px 0 0;
+            padding: 1rem 1.5rem;
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(4px);
+            color: #333;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary-glass {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+        }
+
+        .btn-primary-glass:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .table-glass {
+            --bs-table-bg: transparent;
+            --bs-table-hover-bg: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-badge {
+            border-radius: 30px;
+            padding: 0.5em 1em;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Modal Glass */
+        .modal-content {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .modal-footer {
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        /* Dark Mode for Video/Proxy Modals */
+        .modal-dark .modal-content {
+            background: rgba(30, 30, 30, 0.9);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .modal-dark .modal-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .modal-dark .form-control {
+            background: rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .form-control, .form-select {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            backdrop-filter: blur(4px);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 0 4px rgba(118, 75, 162, 0.1);
+            border-color: #764ba2;
+        }
+
+        /* Animations */
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.3s ease;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
     </style>
 </head>
-<body class="bg-light">
-    <div class="container py-5" id="app">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Video Download Manager</h1>
-            <div class="d-flex gap-2 align-items-center">
-                <span class="badge bg-info text-dark me-2">Active Clients: {{ activeClientCount }}</span>
-                <button class="btn btn-outline-primary" @click="showServerModal">
-                    Servers ({{ servers.length }})
+<body>
+    <div class="container py-4" id="app">
+        <!-- Header -->
+        <div class="glass-panel p-4 mb-4 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="bg-white p-2 rounded-circle shadow-sm">
+                    <i class="bi bi-cloud-download-fill text-primary fs-3"></i>
+                </div>
+                <div>
+                    <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
+                    <small class="text-muted">v2.0.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                </div>
+            </div>
+            
+            <div class="d-flex flex-wrap gap-2 justify-content-center">
+                <button class="btn btn-glass" @click="showServerModal" title="Manage Servers">
+                    <i class="bi bi-hdd-network"></i> <span class="d-none d-sm-inline">Servers</span>
+                    <span class="badge bg-primary rounded-pill ms-1">{{ servers.length }}</span>
                 </button>
-                <button class="btn btn-outline-dark" @click="showProxyModal">
-                    Secure Proxy
+                <button class="btn btn-glass" @click="showProxyModal" title="Secure Proxy">
+                    <i class="bi bi-shield-lock"></i> <span class="d-none d-sm-inline">Proxy</span>
                 </button>
-                <button class="btn btn-outline-danger" v-if="userRole === 'admin'" @click="openAdminStats">
-                    Admin
+                <button class="btn btn-glass text-danger" v-if="userRole === 'admin'" @click="openAdminStats" title="Admin Dashboard">
+                    <i class="bi bi-speedometer2"></i> <span class="d-none d-sm-inline">Admin</span>
                 </button>
-                <button class="btn btn-outline-secondary" @click="$refs.cookieInput.click()" :disabled="uploadingCookies">
-                    {{ uploadingCookies ? 'Uploading...' : 'Upload Cookies' }}
-                </button>
+                <div class="dropdown">
+                    <button class="btn btn-glass dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-gear"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-4 p-2" style="background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);">
+                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="$refs.cookieInput.click()">Upload Cookies</a></li>
+                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="updateSystem">Check Updates</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item rounded-3 text-danger" href="#" @click.prevent="logout">Logout</a></li>
+                    </ul>
+                </div>
                 <input type="file" ref="cookieInput" class="d-none" accept=".txt" @change="uploadCookies">
-
-                <button class="btn btn-outline-secondary" @click="updateSystem" :disabled="updating">
-                    <span v-if="updating" class="spinner-border spinner-border-sm me-2"></span>
-                    {{ updating ? 'Updating...' : 'Check for Updates' }}
-                </button>
-                <button class="btn btn-outline-secondary" @click="logout">
-                    Logout
-                </button>
             </div>
         </div>
         
         <!-- Download Form -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-body">
+        <div class="glass-panel mb-4">
+            <div class="glass-header">
+                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>New Download</h5>
+            </div>
+            <div class="p-4">
                 <form @submit.prevent="startDownload">
-                    <div class="mb-3">
-                        <label class="form-label">Video URL</label>
-                        <input type="url" class="form-control" v-model="form.url" required placeholder="https://www.youtube.com/watch?v=...">
+                    <div class="mb-4">
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-link-45deg"></i></span>
+                            <input type="url" class="form-control border-start-0 ps-0" v-model="form.url" required placeholder="Paste video URL here...">
+                        </div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Target Server</label>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted fw-bold">Server</label>
                             <select class="form-select" v-model="form.targetServer">
-                                <option value="auto">Auto (Least Busy)</option>
+                                <option value="auto">✨ Auto (Best)</option>
                                 <option v-for="s in servers" :key="s.url" :value="s.url">
                                     {{ s.name }} ({{ s.status }})
                                 </option>
                             </select>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Type</label>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted fw-bold">Type</label>
                             <select class="form-select" v-model="form.type">
-                                <option value="video">Video + Audio</option>
-                                <option value="audio">Audio Only</option>
+                                <option value="video">🎬 Video + Audio</option>
+                                <option value="audio">🎵 Audio Only</option>
                             </select>
                         </div>
                         
-                        <div class="col-md-3 mb-3" v-if="form.type === 'video'">
-                            <label class="form-label">Quality</label>
+                        <div class="col-md-3" v-if="form.type === 'video'">
+                            <label class="form-label small text-muted fw-bold">Quality</label>
                             <select class="form-select" v-model="form.quality">
-                                <option value="best">Best Available</option>
+                                <option value="best">🌟 Best Available</option>
                                 <option value="1080">1080p</option>
                                 <option value="720">720p</option>
                                 <option value="480">480p</option>
                             </select>
                         </div>
 
-                        <div class="col-md-3 mb-3" v-if="form.type === 'video'">
-                            <label class="form-label">Subtitles</label>
-                            <div class="input-group">
-                                <div class="input-group-text">
-                                    <input class="form-check-input mt-0" type="checkbox" v-model="form.subtitles" aria-label="Enable subtitles">
+                        <div class="col-md-3" v-if="form.type === 'video'">
+                            <label class="form-label small text-muted fw-bold">Subtitles</label>
+                            <div class="d-flex gap-2">
+                                <div class="form-check form-switch pt-2">
+                                    <input class="form-check-input" type="checkbox" v-model="form.subtitles">
                                 </div>
-                                <select class="form-select" v-model="form.subtitles_lang" :disabled="!form.subtitles">
-                                    <option value="ja">Japanese</option>
-                                    <option value="en">English</option>
+                                <select class="form-select form-select-sm" v-model="form.subtitles_lang" :disabled="!form.subtitles">
+                                    <option value="ja">JP</option>
+                                    <option value="en">EN</option>
                                 </select>
-                            </div>
-                            <div class="form-check mt-1">
-                                <input class="form-check-input" type="checkbox" v-model="form.embed_subtitles" id="embedSub" :disabled="!form.subtitles">
-                                <label class="form-check-label" for="embedSub">Embed</label>
                             </div>
                         </div>
                         
-                        <div class="col-md-3 mb-3" v-if="form.type === 'audio'">
-                            <label class="form-label">Format</label>
+                        <div class="col-md-3" v-if="form.type === 'audio'">
+                            <label class="form-label small text-muted fw-bold">Format</label>
                             <select class="form-select" v-model="form.audio_format">
                                 <option value="mp3">MP3</option>
                                 <option value="m4a">M4A</option>
@@ -105,207 +249,254 @@
                         </div>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary" :disabled="loading">
-                        <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-                        Start Download
-                    </button>
+                    <div class="mt-4 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary-glass px-5 py-2 rounded-pill fw-bold" :disabled="loading">
+                            <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
+                            {{ loading ? 'Starting...' : 'Start Download' }}
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
 
-        <!-- Active Downloads -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0">Active Jobs</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 5%">ID</th>
-                                <th style="width: 10%">Server</th>
-                                <th style="width: 25%">Title / URL</th>
-                                <th style="width: 10%">Status</th>
-                                <th style="width: 20%">Progress</th>
-                                <th style="width: 10%">Info</th>
-                                <th style="width: 20%">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="job in jobs" :key="job.id + job.serverUrl">
-                                <td>{{ job.id.substring(0, 4) }}</td>
-                                <td><span class="badge bg-info text-dark">{{ getServerName(job.serverUrl) }}</span></td>
-                                <td>
-                                    <div class="fw-bold text-truncate" style="max-width: 250px;">{{ job.title || job.url }}</div>
-                                    <small class="text-muted">{{ job.filename }}</small>
-                                </td>
-                                <td>
-                                    <span class="badge status-badge" :class="getStatusClass(job.status)">
-                                        {{ job.status }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="progress" v-if="job.status === 'downloading'">
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                             role="progressbar" 
-                                             :style="{ width: job.progress + '%' }">
-                                            {{ job.progress }}%
+        <div class="row g-4">
+            <!-- Active Downloads -->
+            <div class="col-lg-12">
+                <div class="glass-panel h-100">
+                    <div class="glass-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Active Jobs</h5>
+                        <span class="badge bg-white text-dark shadow-sm">{{ jobs.length }}</span>
+                    </div>
+                    <div class="p-0 table-responsive">
+                        <table class="table table-glass align-middle mb-0">
+                            <thead class="text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Title</th>
+                                    <th>Status</th>
+                                    <th>Progress</th>
+                                    <th>Info</th>
+                                    <th class="text-end pe-4">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="job in jobs" :key="job.id + job.serverUrl">
+                                    <td class="ps-4">
+                                        <div class="fw-bold text-truncate" style="max-width: 250px;">{{ job.title || job.url }}</div>
+                                        <div class="small text-muted"><i class="bi bi-hdd-network me-1"></i>{{ getServerName(job.serverUrl) }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge status-badge" :class="getStatusClass(job.status)">
+                                            {{ job.status }}
+                                        </span>
+                                    </td>
+                                    <td style="min-width: 150px;">
+                                        <div class="progress" style="height: 8px; border-radius: 4px; background: rgba(0,0,0,0.05);" v-if="job.status === 'downloading'">
+                                            <div class="progress-bar bg-primary" 
+                                                 role="progressbar" 
+                                                 :style="{ width: job.progress + '%' }"></div>
                                         </div>
-                                    </div>
-                                    <div v-else-if="job.status === 'finished'" class="text-success">
-                                        Completed
-                                    </div>
-                                    <div v-else-if="job.status === 'error'" class="text-danger">
-                                        {{ job.error_msg }}
-                                    </div>
-                                    <div v-else class="text-muted">Waiting...</div>
-                                </td>
-                                <td>
-                                    <div v-if="job.speed"><small>Speed: {{ job.speed }}</small></div>
-                                    <div v-if="job.eta"><small>ETA: {{ job.eta }}</small></div>
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm action-btn-group">
-                                        <button class="btn btn-outline-danger" 
-                                                @click="deleteJob(job)" 
-                                                title="Delete">
-                                            {{ ['finished', 'error'].includes(job.status) ? 'Clear' : 'Cancel' }}
+                                        <div class="small text-end mt-1" v-if="job.status === 'downloading'">{{ job.progress }}%</div>
+                                        <div v-else-if="job.status === 'error'" class="text-danger small">{{ job.error_msg }}</div>
+                                    </td>
+                                    <td class="small text-muted">
+                                        <div v-if="job.speed"><i class="bi bi-speedometer me-1"></i>{{ job.speed }}</div>
+                                        <div v-if="job.eta"><i class="bi bi-clock me-1"></i>{{ job.eta }}</div>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <button class="btn btn-sm btn-glass text-danger" @click="deleteJob(job)">
+                                            <i class="bi bi-x-lg"></i>
                                         </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr v-if="jobs.length === 0">
-                                <td colspan="7" class="text-center py-3 text-muted">No active jobs</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                                    </td>
+                                </tr>
+                                <tr v-if="jobs.length === 0">
+                                    <td colspan="5" class="text-center py-5 text-muted">
+                                        <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+                                        No active downloads
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Library -->
+            <div class="col-lg-12">
+                <div class="glass-panel h-100">
+                    <div class="glass-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-collection-play me-2"></i>Library</h5>
+                        <button class="btn btn-sm btn-glass" @click="fetchAllData"><i class="bi bi-arrow-clockwise"></i></button>
+                    </div>
+                    <div class="p-0 table-responsive">
+                        <table class="table table-glass align-middle mb-0">
+                            <thead class="text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Filename</th>
+                                    <th>Size</th>
+                                    <th>Date</th>
+                                    <th class="text-end pe-4">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="file in files" :key="file.serverUrl + file.filename">
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-white p-2 rounded me-3 shadow-sm text-primary">
+                                                <i class="bi bi-file-earmark-play-fill fs-5"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-break">{{ file.filename }}</div>
+                                                <div class="small text-muted">{{ getServerName(file.serverUrl) }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ formatSize(file.size) }}</td>
+                                    <td>{{ formatDate(file.created_at) }}</td>
+                                    <td class="text-end pe-4">
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-glass text-primary" @click="playVideo(file)" title="Play">
+                                                <i class="bi bi-play-fill fs-5"></i>
+                                            </button>
+                                            <a class="btn btn-sm btn-glass text-success" :href="getDownloadUrl(file)" download title="Download">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            <button class="btn btn-sm btn-glass text-danger" @click="deleteFile(file)" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="files.length === 0">
+                                    <td colspan="4" class="text-center py-5 text-muted">
+                                        <i class="bi bi-film fs-1 d-block mb-2 opacity-50"></i>
+                                        Library is empty
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Downloaded Files Library -->
-        <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Library (Downloaded Files)</h5>
-                <button class="btn btn-sm btn-outline-secondary" @click="fetchAllData">Refresh</button>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Server</th>
-                                <th>Filename</th>
-                                <th>Size</th>
-                                <th>Date</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="file in files" :key="file.serverUrl + file.filename">
-                                <td><span class="badge bg-light text-dark border">{{ getServerName(file.serverUrl) }}</span></td>
-                                <td>
-                                    <div class="text-break">{{ file.filename }}</div>
-                                </td>
-                                <td>{{ formatSize(file.size) }}</td>
-                                <td>{{ formatDate(file.created_at) }}</td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" 
-                                                @click="playVideo(file)" 
-                                                title="Play">
-                                            Play
-                                        </button>
-                                        <a class="btn btn-outline-success" 
-                                           :href="getDownloadUrl(file)" 
-                                           download 
-                                           title="Download">
-                                            DL
-                                        </a>
-                                        <button class="btn btn-outline-danger" 
-                                                @click="deleteFile(file)" 
-                                                title="Delete">
-                                            Delete
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr v-if="files.length === 0">
-                                <td colspan="5" class="text-center py-3 text-muted">No files found</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Server Management Modal -->
+        <!-- Modals -->
+        
+        <!-- Server Modal -->
         <div class="modal fade" id="serverModal" tabindex="-1" ref="serverModal">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Manage Servers</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Add Server URL</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" v-model="newServerUrl" placeholder="https://...">
-                                <button class="btn btn-primary" @click="addServer">Add</button>
-                            </div>
-                            <div class="form-text">Enter the root URL of the API server (e.g., https://api.example.com)</div>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" v-model="newServerUrl" placeholder="https://api.example.com">
+                            <button class="btn btn-primary" @click="addServer">Add</button>
                         </div>
-                        <ul class="list-group">
-                            <li class="list-group-item d-flex justify-content-between align-items-center" v-for="(s, index) in servers" :key="s.url">
+                        <div class="list-group list-group-flush rounded-3">
+                            <div class="list-group-item d-flex justify-content-between align-items-center" v-for="(s, index) in servers" :key="s.url">
                                 <div>
-                                    <strong>{{ s.name }}</strong>
+                                    <div class="fw-bold">{{ s.name }}</div>
                                     <div class="small text-muted">{{ s.url }}</div>
-                                    <span class="badge" :class="s.status === 'online' ? 'bg-success' : 'bg-danger'">{{ s.status }}</span>
-                                    <span class="badge bg-secondary ms-1" v-if="s.activeJobs !== undefined">{{ s.activeJobs }} jobs</span>
                                 </div>
-                                <button class="btn btn-sm btn-danger" @click="removeServer(index)" v-if="s.url !== '/'">Remove</button>
-                            </li>
-                        </ul>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge rounded-pill" :class="s.status === 'online' ? 'bg-success' : 'bg-danger'">{{ s.status }}</span>
+                                    <button class="btn btn-sm btn-outline-danger rounded-circle" @click="removeServer(index)" v-if="s.url !== '/'"><i class="bi bi-x"></i></button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-                    </table>
                 </div>
             </div>
         </div>
 
         <!-- Video Player Modal -->
-        <div class="modal fade" id="videoModal" tabindex="-1" aria-hidden="true" ref="videoModal">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content bg-dark">
-                    <div class="modal-header border-secondary">
+        <div class="modal fade modal-dark" id="videoModal" tabindex="-1" ref="videoModal">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header border-0">
                         <h5 class="modal-title text-white">Preview</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body p-0 bg-black d-flex justify-content-center align-items-center" style="min-height: 300px;">
-                        <video ref="videoPlayer" controls class="w-100" :src="currentVideoUrl" style="max-height: 80vh;"></video>
+                    <div class="modal-body p-0 bg-black rounded-bottom-4 overflow-hidden d-flex justify-content-center align-items-center" style="min-height: 50vh;">
+                        <video ref="videoPlayer" controls class="w-100" :src="currentVideoUrl" style="max-height: 80vh; outline: none;"></video>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Proxy Modal -->
-        <div class="modal fade" id="proxyModal" tabindex="-1" aria-hidden="true" ref="proxyModal">
+        <div class="modal fade modal-dark" id="proxyModal" tabindex="-1" ref="proxyModal">
             <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content bg-dark text-white">
-                    <div class="modal-header border-secondary">
-                        <h5 class="modal-title">Secure Web Proxy (AES-GCM)</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-shield-lock-fill me-2"></i>Secure Proxy</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p class="text-muted small">Enter a URL to browse securely. All traffic is encrypted and routed through the server.</p>
+                        <p class="text-white-50 small mb-3">Browse the web securely through the server's encrypted tunnel.</p>
                         <div class="input-group mb-3">
-                            <input type="text" class="form-control bg-dark text-white border-secondary" v-model="proxyUrl" placeholder="https://example.com" @keyup.enter="proxyGo">
+                            <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-globe"></i></span>
+                            <input type="text" class="form-control text-white" v-model="proxyUrl" placeholder="https://example.com" @keyup.enter="proxyGo">
                             <button class="btn btn-primary" @click="proxyGo">Go</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Modal -->
+        <div class="modal fade" id="adminModal" tabindex="-1" ref="adminModal">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-speedometer2 me-2"></i>Admin Dashboard</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" v-if="adminStats">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 bg-light border text-center">
+                                    <div class="text-muted small text-uppercase fw-bold">Active Clients</div>
+                                    <div class="fs-2 fw-bold text-primary">{{ adminStats.active_clients }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 bg-light border text-center">
+                                    <div class="text-muted small text-uppercase fw-bold">Total Sessions</div>
+                                    <div class="fs-2 fw-bold text-success">{{ adminStats.sessions }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 bg-light border text-center">
+                                    <div class="text-muted small text-uppercase fw-bold">Disk Usage</div>
+                                    <div class="fs-5 fw-bold text-info" v-if="adminStats.disk_usage">
+                                        {{ Math.round(adminStats.disk_usage.used / (1024**3)) }}GB / {{ Math.round(adminStats.disk_usage.total / (1024**3)) }}GB
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold mb-3">System Information</h6>
+                        <table class="table table-sm table-bordered" v-if="adminStats.system_info">
+                            <tbody>
+                                <tr><th class="bg-light w-25">Platform</th><td>{{ adminStats.system_info.platform }}</td></tr>
+                                <tr><th class="bg-light">Python</th><td>{{ adminStats.system_info.python_version }}</td></tr>
+                                <tr><th class="bg-light">CPU Cores</th><td>{{ adminStats.system_info.cpu_count }}</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h6 class="fw-bold mb-3 mt-4">Active Client IPs</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between" v-for="(time, ip) in adminStats.clients_list" :key="ip">
+                                <span class="font-monospace">{{ ip }}</span>
+                                <span class="text-muted small">Last seen: {{ new Date(time * 1000).toLocaleTimeString() }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="modal-body text-center" v-else>
+                        <div class="spinner-border text-primary" role="status"></div>
                     </div>
                 </div>
             </div>
@@ -334,29 +525,53 @@
                     },
                     jobs: [],
                     files: [],
-                    servers: [], // { url: string, name: string, status: string, activeJobs: number }
+                    servers: [],
                     newServerUrl: '',
                     loading: false,
                     updating: false,
                     uploadingCookies: false,
                     timer: null,
                     currentVideoUrl: '',
+                    
+                    // Modal Instances
                     modalInstance: null,
                     serverModalInstance: null,
                     proxyModalInstance: null,
+                    adminModalInstance: null,
+                    
                     activeClientCount: 0,
                     proxyUrl: '',
-                    userRole: ''
+                    userRole: '',
+                    adminStats: null
                 }
             },
             methods: {
+                // --- Modal Helpers ---
+                getModal(refName) {
+                    if (typeof bootstrap === 'undefined') {
+                        console.error("Bootstrap is not loaded!");
+                        alert("System Error: UI Framework not loaded.");
+                        return null;
+                    }
+                    const el = this.$refs[refName];
+                    if (!el) {
+                        console.error(`Modal element ${refName} not found`);
+                        return null;
+                    }
+                    // Check if instance exists in bootstrap data
+                    let instance = bootstrap.Modal.getInstance(el);
+                    if (!instance) {
+                        instance = new bootstrap.Modal(el);
+                    }
+                    return instance;
+                },
+
                 // --- Server Management ---
                 loadServers() {
                     const saved = localStorage.getItem('yt_dlp_servers');
                     if (saved) {
                         this.servers = JSON.parse(saved);
                     } else {
-                        // Default local server
                         this.servers = [{ url: '/', name: 'Local', status: 'unknown' }];
                     }
                 },
@@ -365,17 +580,14 @@
                 },
                 async addServer() {
                     if (!this.newServerUrl) return;
-                    // Normalize URL
                     let url = this.newServerUrl.trim();
                     if (url.endsWith('/')) url = url.slice(0, -1);
                     
-                    // Check duplicate
                     if (this.servers.find(s => s.url === url)) {
                         alert('Server already exists');
                         return;
                     }
 
-                    // Verify connection
                     try {
                         const res = await axios.get(url === '/' ? '/system/info' : `${url}/system/info`);
                         this.servers.push({
@@ -398,24 +610,15 @@
                         this.fetchAllData();
                     }
                 },
+                
+                // --- UI Actions ---
                 showServerModal() {
-                    if (!this.serverModalInstance) {
-                        this.serverModalInstance = new bootstrap.Modal(this.$refs.serverModal);
-                    }
-                    this.serverModalInstance.show();
+                    const modal = this.getModal('serverModal');
+                    if (modal) modal.show();
                 },
                 showProxyModal() {
-                    console.log("Opening Proxy Modal");
-                    if (!this.proxyModalInstance) {
-                        const el = this.$refs.proxyModal;
-                        if (el) {
-                            this.proxyModalInstance = new bootstrap.Modal(el);
-                        } else {
-                            console.error("Proxy Modal element not found");
-                            return;
-                        }
-                    }
-                    this.proxyModalInstance.show();
+                    const modal = this.getModal('proxyModal');
+                    if (modal) modal.show();
                 },
                 async logout() {
                     try {
@@ -426,30 +629,35 @@
                     }
                 },
                 async openAdminStats() {
+                    const modal = this.getModal('adminModal');
+                    if (modal) {
+                        modal.show();
+                        this.fetchAdminStats();
+                    }
+                },
+                async fetchAdminStats() {
                     try {
                         const res = await axios.get('/api/admin/stats');
-                        alert(JSON.stringify(res.data, null, 2));
+                        this.adminStats = res.data;
                     } catch (e) {
-                        alert('Failed to fetch stats: ' + (e.response?.data?.detail || e.message));
+                        console.error(e);
+                        this.adminStats = null;
                     }
                 },
                 async proxyGo() {
                     if (!this.proxyUrl) return;
-                    
                     try {
-                        // Encrypt URL
                         const res = await axios.post('/api/proxy/encrypt', { url: this.proxyUrl });
-                        const encryptedUrl = res.data.encrypted_url;
+                        const encryptedUrl = res.data.payload; // Fixed: API returns 'payload' not 'encrypted_url'
                         
-                        // Create hidden form and submit
                         const form = document.createElement('form');
                         form.method = 'POST';
                         form.action = '/proxy';
-                        form.target = '_blank'; // Open in new tab
+                        form.target = '_blank';
                         
                         const input = document.createElement('input');
                         input.type = 'hidden';
-                        input.name = 'url';
+                        input.name = 'payload'; // Fixed: API expects 'payload'
                         input.value = encryptedUrl;
                         
                         form.appendChild(input);
@@ -457,10 +665,8 @@
                         form.submit();
                         document.body.removeChild(form);
                         
-                        // Close modal
-                        if (this.proxyModalInstance) {
-                            this.proxyModalInstance.hide();
-                        }
+                        const modal = this.getModal('proxyModal');
+                        if (modal) modal.hide();
                         this.proxyUrl = '';
                     } catch (e) {
                         alert('Proxy Error: ' + (e.response?.data?.detail || e.message));
@@ -478,7 +684,7 @@
                             const endpoint = s.url === '/' ? '/system/info' : `${s.url}/system/info`;
                             const res = await axios.get(endpoint, { timeout: 3000 });
                             s.status = 'online';
-                            s.name = res.data.hostname; // Update hostname
+                            s.name = res.data.hostname;
                             s.activeJobs = res.data.active_jobs;
                             
                             if (s.url === '/') {
@@ -490,19 +696,17 @@
                             s.activeJobs = undefined;
                         }
                     }
-                    this.saveServers(); // Save updated names/status
+                    this.saveServers();
                 },
 
                 async fetchAllData() {
                     await this.checkServerStatus();
                     
-                    // Fetch jobs and files from ALL online servers
                     const jobPromises = [];
                     const filePromises = [];
 
                     for (const s of this.servers) {
                         if (s.status !== 'online') continue;
-                        
                         const baseUrl = s.url === '/' ? '' : s.url;
                         
                         jobPromises.push(
@@ -519,7 +723,6 @@
                     }
 
                     const allJobs = (await Promise.all(jobPromises)).flat();
-                    // Sort by created_at desc
                     this.jobs = allJobs.sort((a, b) => b.created_at - a.created_at);
 
                     const allFiles = (await Promise.all(filePromises)).flat();
@@ -530,15 +733,10 @@
                 async startDownload() {
                     this.loading = true;
                     try {
-                        // Determine target server
                         let targetUrl = this.form.targetServer;
-                        
                         if (targetUrl === 'auto') {
-                            // Find online server with fewest active jobs
                             const onlineServers = this.servers.filter(s => s.status === 'online');
                             if (onlineServers.length === 0) throw new Error("No online servers available");
-                            
-                            // Sort by activeJobs asc
                             onlineServers.sort((a, b) => (a.activeJobs || 0) - (b.activeJobs || 0));
                             targetUrl = onlineServers[0].url;
                         }
@@ -565,7 +763,7 @@
                     }
                 },
                 async deleteFile(file) {
-                    if(!confirm('Delete ' + file.filename + ' from ' + this.getServerName(file.serverUrl) + '?')) return;
+                    if(!confirm('Delete ' + file.filename + '?')) return;
                     try {
                         const baseUrl = file.serverUrl === '/' ? '' : file.serverUrl;
                         await axios.delete(`${baseUrl}/files/${encodeURIComponent(file.filename)}`);
@@ -577,29 +775,24 @@
 
                 // --- Utils ---
                 async uploadCookies(event) {
-                    // Upload to ALL servers? Or just local?
-                    // For now, let's upload to ALL online servers to keep them in sync
                     const file = event.target.files[0];
                     if (!file) return;
-                    
                     this.uploadingCookies = true;
-                    
                     try {
                         const promises = this.servers
                             .filter(s => s.status === 'online')
                             .map(s => {
                                 const formData = new FormData();
-                                formData.append('file', file); // Need new FormData for each request? No, but safer.
+                                formData.append('file', file);
                                 const baseUrl = s.url === '/' ? '' : s.url;
                                 return axios.post(`${baseUrl}/system/cookies`, formData, {
                                     headers: { 'Content-Type': 'multipart/form-data' }
                                 });
                             });
-
                         await Promise.all(promises);
                         alert(`Cookies uploaded to ${promises.length} servers.`);
                     } catch (error) {
-                        alert('Cookie upload failed on some servers.');
+                        alert('Cookie upload failed.');
                     } finally {
                         this.uploadingCookies = false;
                         event.target.value = '';
@@ -616,7 +809,7 @@
                                 return axios.post(`${baseUrl}/system/update`).catch(e => console.error(e));
                             });
                         await Promise.all(promises);
-                        alert('Update command sent to all servers.');
+                        alert('Update command sent.');
                     } catch (error) {
                         alert('Update failed');
                     } finally {
@@ -624,15 +817,13 @@
                     }
                 },
                 
-                // ... (getStatusClass, formatSize, formatDate same as before) ...
-                
                 getStatusClass(status) {
                     switch(status) {
-                        case 'queued': return 'bg-secondary';
-                        case 'downloading': return 'bg-primary';
-                        case 'finished': return 'bg-success';
-                        case 'error': return 'bg-danger';
-                        default: return 'bg-secondary';
+                        case 'queued': return 'bg-secondary text-white';
+                        case 'downloading': return 'bg-primary text-white';
+                        case 'finished': return 'bg-success text-white';
+                        case 'error': return 'bg-danger text-white';
+                        default: return 'bg-secondary text-white';
                     }
                 },
                 getFileUrl(file) {
@@ -657,31 +848,16 @@
                 },
                 playVideo(file) {
                     this.currentVideoUrl = this.getFileUrl(file);
-                    console.log("Playing video:", this.currentVideoUrl);
-                    
-                    if (!this.modalInstance) {
-                        const modalEl = this.$refs.videoModal;
-                        if (!modalEl) {
-                            console.error("Modal element not found!");
-                            return;
-                        }
-                        this.modalInstance = new bootstrap.Modal(modalEl);
-                        modalEl.addEventListener('hidden.bs.modal', () => {
+                    const modal = this.getModal('videoModal');
+                    if (modal) {
+                        modal.show();
+                        // Auto-play
+                        this.$nextTick(() => {
                             if (this.$refs.videoPlayer) {
-                                this.$refs.videoPlayer.pause();
-                                this.$refs.videoPlayer.currentTime = 0;
+                                this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
                             }
-                            this.currentVideoUrl = '';
                         });
                     }
-                    this.modalInstance.show();
-                    
-                    // Auto-play
-                    this.$nextTick(() => {
-                        if (this.$refs.videoPlayer) {
-                            this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
-                        }
-                    });
                 }
             },
             mounted() {
@@ -697,7 +873,19 @@
                 
                 this.timer = setInterval(() => {
                     this.fetchAllData();
-                }, 2000); // Poll every 2s
+                }, 2000);
+                
+                // Modal cleanup
+                const videoModalEl = this.$refs.videoModal;
+                if (videoModalEl) {
+                    videoModalEl.addEventListener('hidden.bs.modal', () => {
+                        if (this.$refs.videoPlayer) {
+                            this.$refs.videoPlayer.pause();
+                            this.$refs.videoPlayer.currentTime = 0;
+                        }
+                        this.currentVideoUrl = '';
+                    });
+                }
             },
             beforeUnmount() {
                 if (this.timer) clearInterval(this.timer);

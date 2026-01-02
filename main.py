@@ -495,10 +495,23 @@ async def admin_stats(request: Request):
     if sessions[token].get('role') != 'admin':
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    # Get Disk Usage
+    total, used, free = shutil.disk_usage(DOWNLOAD_DIR)
+    
     return {
         "active_clients": get_active_client_count(),
         "sessions": len(sessions),
-        "clients_list": active_clients
+        "clients_list": active_clients,
+        "disk_usage": {
+            "total": total,
+            "used": used,
+            "free": free
+        },
+        "system_info": {
+            "platform": sys.platform,
+            "python_version": sys.version,
+            "cpu_count": os.cpu_count()
+        }
     }
 
 # --- Proxy Endpoints ---
