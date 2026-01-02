@@ -73,28 +73,14 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 # --- Auth & Stats ---
 AUTH_COOKIE_NAME = "ytdlp_auth"
 
-# Load or Generate Admin Token
-TOKEN_FILE = os.path.join(execution_dir, "admin_token.txt")
-if os.path.exists(TOKEN_FILE):
-    try:
-        with open(TOKEN_FILE, "r") as f:
-            ADMIN_TOKEN = f.read().strip()
-    except Exception as e:
-        logging.error(f"Failed to read token file: {e}")
-        ADMIN_TOKEN = secrets.token_urlsafe(16)
-else:
-    ADMIN_TOKEN = secrets.token_urlsafe(16)
-    try:
-        with open(TOKEN_FILE, "w") as f:
-            f.write(ADMIN_TOKEN)
-    except Exception as e:
-        logging.error(f"Failed to write token file: {e}")
-
-logging.info(f"ADMIN TOKEN: {ADMIN_TOKEN}")
-logging.info(f"Token file: {TOKEN_FILE}")
+# User Credentials
+USERS = {
+    "admin": "Shogo3170!",
+    "user": "0713"
+}
 
 # Session Store (Simple in-memory)
-# Token -> {exp: timestamp, ip: str, ua_hash: str}
+# Token -> {exp: timestamp, ip: str, ua_hash: str, role: str}
 sessions: Dict[str, Dict] = {}
 
 # Stats
@@ -473,17 +459,19 @@ async def delete_file(filename: str):
 # --- Auth Endpoints ---
 
 class LoginRequest(BaseModel):
-    token: str
+    username: str
+    password: str
 
 @app.post("/api/login")
 async def login(req: LoginRequest, response: Response):
-    if req.token == ADMIN_TOKEN:
+    if req.username in USERS and USERS[req.username] == req.password:
         # Create session
         session_token = secrets.token_urlsafe(32)
         sessions[session_token] = {
             "exp": time.time() + (12 * 3600), # 12 hours
             "ip": "unknown", # Will be updated on first request
-            "ua_hash": "unknown"
+            "ua_hash": "unknown",
+            "role": "admin" if req.username == "admin" else "user"
         }
         
         response.set_cookie(
@@ -495,11 +483,18 @@ async def login(req: LoginRequest, response: Response):
         )
         return {"message": "Logged in"}
     else:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.get("/api/admin/stats")
 async def admin_stats(request: Request):
-    # Check if admin (already checked by middleware, but double check logic if needed)
+    # Check Auth & Role
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or token not in sessions:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if sessions[token].get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     return {
         "active_clients": get_active_client_count(),
         "sessions": len(sessions),
