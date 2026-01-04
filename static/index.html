@@ -33,6 +33,47 @@
             --modal-bg: rgba(30, 30, 30, 0.95);
         }
 
+        [data-theme="dark"] .text-muted {
+            color: #adb5bd !important;
+        }
+        
+        [data-theme="dark"] .bg-light {
+            background-color: #2c2c2c !important;
+            color: #e0e0e0;
+        }
+
+        [data-theme="dark"] .table-bordered {
+            border-color: #444;
+        }
+        
+        [data-theme="dark"] .table-bordered td, 
+        [data-theme="dark"] .table-bordered th {
+            border-color: #444;
+        }
+
+        [data-theme="dark"] .nav-tabs .nav-link {
+            color: #adb5bd;
+        }
+        
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: #2c2c2c;
+            border-color: #444 #444 #2c2c2c;
+            color: #fff;
+        }
+        
+        [data-theme="dark"] .nav-tabs {
+            border-bottom-color: #444;
+        }
+        
+        [data-theme="dark"] .modal-content {
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+        
+        [data-theme="dark"] .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+
         body {
             background: var(--bg-color);
             min-height: 100vh;
@@ -576,6 +617,9 @@
                             <li class="nav-item">
                                 <a class="nav-link" :class="{active: adminTab === 'ip'}" href="#" @click.prevent="adminTab = 'ip'">IP Manager</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" :class="{active: adminTab === 'files'}" href="#" @click.prevent="loadAdminFiles('')">File Manager</a>
+                            </li>
                         </ul>
 
                         <!-- Overview Tab -->
@@ -632,6 +676,30 @@
                                         </li>
                                     </ul>
                                 </div>
+                            </div>
+                            
+                            <h6 class="fw-bold mt-4 mb-3">Client Fingerprints</h6>
+                            <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                <table class="table table-sm table-bordered table-hover">
+                                    <thead class="bg-light sticky-top">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>IP</th>
+                                            <th>Screen</th>
+                                            <th>UA</th>
+                                            <th>Last Seen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="c in adminStats.clients" :key="c.client_id">
+                                            <td class="small font-monospace text-truncate" style="max-width: 80px;" :title="c.client_id">{{ c.client_id.substring(0,8) }}...</td>
+                                            <td class="small font-monospace">{{ c.ip }}</td>
+                                            <td class="small">{{ c.screen_res }}</td>
+                                            <td class="small text-truncate" style="max-width: 150px;" :title="c.user_agent">{{ c.user_agent }}</td>
+                                            <td class="small">{{ new Date(c.last_seen * 1000).toLocaleString() }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -697,6 +765,48 @@
                             </div>
                         </div>
 
+                        <!-- File Manager Tab -->
+                        <div v-if="adminTab === 'files'">
+                            <div class="mb-2 d-flex align-items-center">
+                                <button class="btn btn-sm btn-outline-secondary me-2" @click="loadAdminFiles(getParentPath(adminCurrentPath))" :disabled="!adminCurrentPath">
+                                    <i class="bi bi-arrow-up"></i> Up
+                                </button>
+                                <span class="font-monospace small text-muted">{{ adminCurrentPath || '/' }}</span>
+                            </div>
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-hover table-bordered">
+                                    <thead class="bg-light sticky-top">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Size</th>
+                                            <th>Date</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="f in adminFiles" :key="f.name">
+                                            <td>
+                                                <a href="#" @click.prevent="f.is_dir ? loadAdminFiles(joinPath(adminCurrentPath, f.name)) : downloadAdminFile(joinPath(adminCurrentPath, f.name))" class="text-decoration-none">
+                                                    <i class="bi" :class="f.is_dir ? 'bi-folder-fill text-warning' : 'bi-file-earmark-text text-secondary'"></i>
+                                                    {{ f.name }}
+                                                </a>
+                                            </td>
+                                            <td class="small">{{ f.is_dir ? '-' : formatSize(f.size) }}</td>
+                                            <td class="small">{{ new Date(f.mtime * 1000).toLocaleString() }}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-link text-danger p-0" @click="deleteAdminFile(joinPath(adminCurrentPath, f.name))">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="adminFiles.length === 0">
+                                            <td colspan="4" class="text-center text-muted">Empty directory</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                     <div class="modal-body text-center" v-else-if="adminError">
                         <div class="text-danger mb-3"><i class="bi bi-exclamation-triangle fs-1"></i></div>
@@ -756,6 +866,8 @@
                     adminTab: 'overview',
                     blockIpTarget: '',
                     blockIpReason: '',
+                    adminFiles: [],
+                    adminCurrentPath: '',
                     theme: 'light'
                 }
             },
@@ -888,6 +1000,40 @@
                         alert('Failed to unblock IP: ' + (e.response?.data?.detail || e.message));
                     }
                 },
+                
+                // --- File Manager ---
+                async loadAdminFiles(path) {
+                    this.adminTab = 'files';
+                    try {
+                        const res = await axios.get('/api/admin/files', { params: { path: path } });
+                        this.adminFiles = res.data.items;
+                        this.adminCurrentPath = res.data.path;
+                    } catch (e) {
+                        alert('Failed to load files: ' + (e.response?.data?.detail || e.message));
+                    }
+                },
+                async deleteAdminFile(path) {
+                    if (!confirm(`Delete ${path}? This cannot be undone.`)) return;
+                    try {
+                        await axios.delete('/api/admin/files', { params: { path: path } });
+                        this.loadAdminFiles(this.adminCurrentPath);
+                    } catch (e) {
+                        alert('Failed to delete: ' + (e.response?.data?.detail || e.message));
+                    }
+                },
+                downloadAdminFile(path) {
+                    window.open(`/api/admin/files?path=${encodeURIComponent(path)}`, '_blank');
+                },
+                joinPath(base, name) {
+                    return base ? `${base}/${name}` : name;
+                },
+                getParentPath(path) {
+                    if (!path) return '';
+                    const parts = path.split('/');
+                    parts.pop();
+                    return parts.join('/');
+                },
+
                 async proxyGo() {
                     if (!this.proxyUrl) return;
                     
@@ -1131,8 +1277,19 @@
                     document.documentElement.setAttribute('data-theme', 'dark');
                 }
 
-                // Check Auth
-                axios.get('/system/info').catch(e => {
+                // Check Auth & Send Client Info
+                axios.get('/system/info').then(() => {
+                    // Send Client Info
+                    const info = {
+                        ua: navigator.userAgent,
+                        screen: `${window.screen.width}x${window.screen.height}`,
+                        window: `${window.innerWidth}x${window.innerHeight}`,
+                        depth: window.screen.colorDepth,
+                        theme: this.theme,
+                        orientation: window.screen.orientation ? window.screen.orientation.type : 'unknown'
+                    };
+                    axios.post('/api/client/info', info).catch(e => console.error("Client info error", e));
+                }).catch(e => {
                     if (e.response && e.response.status === 401) {
                         window.location.href = '/static/login.html';
                     }

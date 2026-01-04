@@ -122,6 +122,13 @@ class InstallerApp(tk.Tk):
         target_dir = self.install_dir.get()
         port = self.port.get()
         
+        # 0. Stop Existing Process
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", "YtDlpApiServer.exe"], capture_output=True)
+            time.sleep(1) # Wait for release
+        except:
+            pass
+
         # 1. Create Directory
         if not os.path.exists(target_dir):
             os.makedirs(target_dir)

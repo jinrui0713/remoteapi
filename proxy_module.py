@@ -119,26 +119,33 @@ class ProxyService:
 
         # Rewrite links
         for tag in soup.find_all(['a', 'link', 'script', 'img', 'iframe']):
-            # Handle href
-            if tag.has_attr('href'):
+            # Handle href (Navigation)
+            if tag.name == 'a' and tag.has_attr('href'):
                 url = tag['href']
                 if url.startswith('http'):
                     tag['href'] = '#'
                     tag['onclick'] = f"proxyGo('{url}'); return false;"
             
-            # Handle src (images, scripts) - These usually need GET
-            # For strict "No GET" policy, we can't easily load images/scripts via standard browser tags
-            # unless we use a blob URL or similar complex mechanism.
-            # Given the constraints, we might have to allow GET for resources OR 
-            # rewrite them to a proxy endpoint that accepts GET but validates a token.
-            # BUT user said "GET usage prohibited" for the main proxy protocol.
-            # Let's assume this applies to the PAGE navigation. Resources might be tricky.
-            # If we strictly follow "No GET", images won't load unless we fetch them via POST (XHR) and blob them.
-            # That's very complex for a simple script.
-            # I will implement link rewriting for navigation. Resources might break or leak if not handled.
-            # For now, let's just rewrite navigation links <a>.
-            pass
+            # Handle src (Resources)
+            # We rewrite src to a GET proxy endpoint for resources to fix broken images/scripts
+            if tag.has_attr('src'):
+                src = tag['src']
+                if src.startswith('http'):
+                    # Encrypt the resource URL
+                    # Note: This is synchronous, but encrypt_payload is sync so it's fine.
+                    # We need to make sure the client can handle this.
+                    # Since we can't easily inject the payload into a GET param without exposing it,
+                    # we will use a new endpoint /api/proxy/resource?payload=...
+                    payload = self.encrypt_payload(src, exp_seconds=300)
+                    tag['src'] = f"/api/proxy/resource?payload={payload}"
             
+            # Handle link href (CSS)
+            if tag.name == 'link' and tag.has_attr('href'):
+                href = tag['href']
+                if href.startswith('http'):
+                    payload = self.encrypt_payload(href, exp_seconds=300)
+                    tag['href'] = f"/api/proxy/resource?payload={payload}"
+
         return str(soup)
 
     async def stream_response(self, response: httpx.Response, client_ip: str = "unknown"):

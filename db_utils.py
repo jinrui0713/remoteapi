@@ -38,9 +38,36 @@ def init_db():
         reason TEXT,
         timestamp REAL
     )''')
+
+    # Client Fingerprints
+    c.execute('''CREATE TABLE IF NOT EXISTS clients (
+        client_id TEXT PRIMARY KEY,
+        ip TEXT,
+        user_agent TEXT,
+        screen_res TEXT,
+        window_size TEXT,
+        color_depth INTEGER,
+        theme TEXT,
+        orientation TEXT,
+        last_seen REAL
+    )''')
     
     conn.commit()
     conn.close()
+
+def update_client_info(client_id: str, ip: str, info: Dict):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('''INSERT OR REPLACE INTO clients 
+                     (client_id, ip, user_agent, screen_res, window_size, color_depth, theme, orientation, last_seen)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (client_id, ip, info.get('ua'), info.get('screen'), info.get('window'), 
+                   info.get('depth'), info.get('theme'), info.get('orientation'), time.time()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"DB Error (Client Info): {e}")
 
 def log_event(ip: str, event_type: str, details: str):
     try:
@@ -101,6 +128,15 @@ def get_logs(limit: int = 100) -> List[Dict]:
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     c.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?", (limit,))
+    rows = c.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_clients() -> List[Dict]:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM clients ORDER BY last_seen DESC")
     rows = c.fetchall()
     conn.close()
     return [dict(row) for row in rows]

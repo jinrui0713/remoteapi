@@ -1,5 +1,10 @@
 # update_app.ps1
 
+param (
+    [string]$Version = "main",
+    [switch]$Beta
+)
+
 # Check for Administrator privileges and self-elevate
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Warning "Not running as Administrator. Attempting to elevate..."
@@ -29,20 +34,25 @@ if (Test-Path ".git") {
         Write-Warning "Git is not installed. Skipping update check."
     } else {
         try {
-            Write-Host "Checking GitHub for updates..."
+            Write-Host "Checking GitHub for updates (Target: $Version)..."
             # Fix for "fatal: detected dubious ownership"
             git config --global --add safe.directory '*' 2>$null
 
-            git fetch origin main
+            git fetch origin $Version
             $LocalHash = git rev-parse HEAD
-            $RemoteHash = git rev-parse origin/main
+            $RemoteHash = git rev-parse origin/$Version
 
             if ($LocalHash -eq $RemoteHash) {
                 Write-Host "Already up to date." -ForegroundColor Green
+                if ($Beta) {
+                    Write-Host "Forcing update for Beta..." -ForegroundColor Yellow
+                    git reset --hard origin/$Version
+                    git pull origin $Version
+                }
             } else {
                 Write-Host "New version found. Updating..." -ForegroundColor Yellow
-                git reset --hard origin/main
-                git pull origin main
+                git reset --hard origin/$Version
+                git pull origin $Version
             }
         } catch {
             Write-Warning "Git update failed. Continuing with local rebuild."
@@ -52,6 +62,13 @@ if (Test-Path ".git") {
 } else {
     Write-Host "Not a git repository. Attempting Binary Update..." -ForegroundColor Cyan
     
+    # Check if Beta Mode requested
+    $BetaMode = $false
+    if ($args -contains "-Beta") {
+        $BetaMode = $true
+        Write-Host "BETA MODE: Installing alongside main server." -ForegroundColor Magenta
+    }
+
     $LatestReleaseUrl = "https://github.com/jinrui0713/remoteapi/releases/latest/download/Setup.exe"
     $InstallerPath = Join-Path $env:TEMP "YtDlpServer_Setup.exe"
     
@@ -60,8 +77,18 @@ if (Test-Path ".git") {
         Invoke-WebRequest -Uri $LatestReleaseUrl -OutFile $InstallerPath
         
         Write-Host "Starting installer..."
-        # Run installer and exit this script
-        Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Verb RunAs
+        
+        if ($BetaMode) {
+            # In Beta mode, we don't kill the main process.
+            # We might need to pass args to installer to tell it to install to a different dir or port?
+            # The current installer GUI allows changing path/port.
+            # If running silently /S, it uses defaults.
+            # We should probably run it interactively for Beta so user can choose port 8081.
+            Start-Process -FilePath $InstallerPath -Verb RunAs
+        } else {
+            # Run installer and exit this script
+            Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Verb RunAs
+        }
         
         Write-Host "Installer started. This window will close."
         Stop-Transcript

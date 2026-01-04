@@ -13,7 +13,7 @@ logging.basicConfig(
 logging.info("Starting server initialization...")
 
 try:
-    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Request, Response, Depends, Form
+    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Request, Response, Depends, Form, Body
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, JSONResponse
@@ -25,6 +25,8 @@ try:
     import time
     import asyncio
     import secrets
+    import hashlib
+    import shutil
     from concurrent.futures import ThreadPoolExecutor
     from typing import Dict, List, Optional
     import db_utils
@@ -41,7 +43,41 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="6.0.7")
+app = FastAPI(title="yt-dlp API Server", version="6.0.8")
+
+# --- Middleware for Bandwidth & Fingerprinting ---
+@app.middleware("http")
+async def monitor_traffic(request: Request, call_next):
+    client_ip = request.client.host
+    
+    # 1. Check Blocked IP
+    if db_utils.is_ip_blocked(client_ip):
+        return Response(content="Access Denied: Your IP is blocked.", status_code=403)
+
+    # 2. Track Active Clients
+    active_clients[client_ip] = time.time()
+    
+    # 3. Capture Request Size (Approx)
+    req_size = int(request.headers.get("content-length", 0))
+    
+    # 4. Process Request
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    
+    # 5. Capture Response Size
+    res_size = 0
+    if "content-length" in response.headers:
+        res_size = int(response.headers["content-length"])
+    
+    # 6. Log Bandwidth (if not already logged by proxy/download specific logic)
+    # Note: Streaming responses might not have content-length set correctly here.
+    # Proxy module handles its own logging.
+    # We log here for general API usage and static files.
+    if not request.url.path.startswith("/proxy") and not request.url.path.startswith("/api/download"):
+         db_utils.log_bandwidth(client_ip, req_size, res_size, "api")
+
+    return response
 
 # CORS設定
 app.add_middleware(
@@ -521,6 +557,12 @@ async def admin_stats(request: Request):
         logs = db_utils.get_logs(limit=50)
         bandwidth = db_utils.get_bandwidth_stats()
         blocked_ips = db_utils.get_blocked_ips()
+        
+        # Get Client List (Fingerprints)
+        # We need to add a function to db_utils for this, or just query here.
+        # Let's add it to db_utils later, for now just raw query or skip if not ready.
+        # Actually, let's add it to db_utils now.
+        clients = db_utils.get_clients()
 
         return {
             "active_clients": get_active_client_count(),
@@ -538,13 +580,90 @@ async def admin_stats(request: Request):
             },
             "logs": logs,
             "bandwidth": bandwidth,
-            "blocked_ips": blocked_ips
+            "blocked_ips": blocked_ips,
+            "clients": clients
         }
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Admin stats error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+@app.post("/api/client/info")
+async def client_info(request: Request, info: Dict = Body(...)):
+    client_ip = request.client.host
+    # Generate a simple fingerprint ID if not provided
+    # In a real scenario, we'd use a library or more complex logic.
+    # Here we trust the client to send some data, and we hash it + IP.
+    
+    # Create a unique ID based on the info provided
+    fingerprint_str = f"{info.get('ua')}{info.get('screen')}{info.get('depth')}{client_ip}"
+    client_id = hashlib.md5(fingerprint_str.encode()).hexdigest()
+    
+    db_utils.update_client_info(client_id, client_ip, info)
+    return {"status": "ok", "client_id": client_id}
+
+# --- File Manager API ---
+
+@app.get("/api/admin/files")
+async def list_files(request: Request, path: str = ""):
+    # Auth Check
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    # Security: Prevent escaping root
+    # We allow browsing DOWNLOAD_DIR and maybe logs
+    # Let's define a ROOT for file manager. 
+    # User asked for "Server files", let's give access to the App Directory but be careful.
+    # execution_dir is where the exe/script is.
+    
+    target_path = os.path.abspath(os.path.join(execution_dir, path))
+    if not target_path.startswith(os.path.abspath(execution_dir)):
+         raise HTTPException(status_code=403, detail="Access Denied")
+         
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail="Path not found")
+        
+    if os.path.isfile(target_path):
+        return FileResponse(target_path)
+        
+    items = []
+    try:
+        with os.scandir(target_path) as it:
+            for entry in it:
+                items.append({
+                    "name": entry.name,
+                    "is_dir": entry.is_dir(),
+                    "size": entry.stat().st_size if not entry.is_dir() else 0,
+                    "mtime": entry.stat().st_mtime
+                })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    return {"path": path, "items": items}
+
+@app.delete("/api/admin/files")
+async def delete_file_admin(path: str, request: Request):
+    # Auth Check
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    target_path = os.path.abspath(os.path.join(execution_dir, path))
+    if not target_path.startswith(os.path.abspath(execution_dir)):
+         raise HTTPException(status_code=403, detail="Access Denied")
+         
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail="Not found")
+        
+    try:
+        if os.path.isdir(target_path):
+            shutil.rmtree(target_path)
+        else:
+            os.remove(target_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "deleted"}
 
 class BlockIPRequest(BaseModel):
     ip: str
@@ -579,6 +698,28 @@ class ProxyEncryptRequest(BaseModel):
 async def proxy_encrypt(req: ProxyEncryptRequest):
     payload = proxy_service.encrypt_payload(req.url)
     return {"payload": payload}
+
+@app.get("/api/proxy/resource")
+async def proxy_resource(payload: str, request: Request):
+    """GET endpoint for proxied resources (images, scripts, css)"""
+    try:
+        client_ip = request.client.host
+        if db_utils.is_ip_blocked(client_ip):
+             return Response(content="Access Denied", status_code=403)
+
+        data = proxy_service.decrypt_payload(payload)
+        url = data['url']
+        
+        resp = await proxy_service.proxy_request(url, client_ip)
+        
+        # Stream response
+        return StreamingResponse(
+            proxy_service.stream_response(resp, client_ip),
+            media_type=resp.headers.get("content-type", "application/octet-stream"),
+            headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
+        )
+    except Exception as e:
+        return Response(status_code=404)
 
 @app.post("/proxy")
 async def proxy_handler(payload: str = Form(...), request: Request = None):
@@ -639,7 +780,7 @@ async def debug_info():
     }
 
 @app.get("/api/download/{filename}")
-async def download_file(filename: str):
+async def download_file(filename: str, request: Request):
     """Direct download endpoint"""
     # Security check
     if ".." in filename or "/" in filename or "\\" in filename:
@@ -649,6 +790,14 @@ async def download_file(filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     
+    # Log Download Event
+    client_ip = request.client.host
+    db_utils.log_event(client_ip, "DOWNLOAD", f"File: {filename}")
+    
+    # Log Bandwidth (Approximate, as we return FileResponse)
+    file_size = os.path.getsize(file_path)
+    db_utils.log_bandwidth(client_ip, 0, file_size, "download")
+
     return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
 
 @app.get("/info")
@@ -735,6 +884,23 @@ async def update_system():
     except Exception as e:
         logging.error(f"Update failed to start: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start update: {str(e)}")
+
+@app.get("/beta/{version}")
+async def update_beta(version: str):
+    """
+    Triggers the update process to a specific beta version.
+    """
+    try:
+        # Run update_app.ps1 with -Beta and -Version
+        subprocess.Popen(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", "update_app.ps1", "-Beta", "-Version", version],
+            cwd=os.getcwd(),
+            creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
+        return {"message": f"Beta update to {version} started. Server will restart in a few minutes."}
+    except Exception as e:
+        logging.error(f"Beta update failed to start: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start beta update: {str(e)}")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
