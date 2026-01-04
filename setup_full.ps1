@@ -193,7 +193,7 @@ if (Test-Path $TokenFile) {
         
         # Stop and uninstall existing service if any
         try {
-            & $CloudflaredExe service stop 2>$null
+            Stop-Service -Name "Cloudflared" -Force -ErrorAction SilentlyContinue
             & $CloudflaredExe service uninstall 2>$null
             Start-Sleep -Seconds 2
         } catch {}
@@ -201,7 +201,8 @@ if (Test-Path $TokenFile) {
         # Install and start service
         try {
             & $CloudflaredExe service install $Token
-            & $CloudflaredExe service start
+            Start-Sleep -Seconds 2
+            Start-Service -Name "Cloudflared"
             Write-Host "Cloudflare Tunnel service installed and started." -ForegroundColor Green
         } catch {
             Write-Warning "Failed to install Cloudflare service: $_"
