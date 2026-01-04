@@ -44,7 +44,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="7.2.2")
+app = FastAPI(title="yt-dlp API Server", version="7.2.3")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -289,15 +289,16 @@ def run_download(job_id: str, req: DownloadRequest):
     logging.info(f"Starting job {job_id}: {req.url}")
     
     # Use TEMP_DIR for downloading
+    # Use job_id as filename to avoid ambiguity and encoding issues during download
     ydl_opts = {
-        'outtmpl': os.path.join(TEMP_DIR, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(TEMP_DIR, f'{job_id}.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
         'progress_hooks': [lambda d: progress_hook(d, job_id)],
         'writethumbnail': False,
-        'restrictfilenames': True, # Ensure filenames are safe (ASCII, no spaces)
-        'windowsfilenames': True, # Force Windows-compatible filenames
-        'noplaylist': True, # Default to single video to prevent accidental playlist downloads
+        'restrictfilenames': True, 
+        'windowsfilenames': True,
+        'noplaylist': True,
     }
 
     # Subtitle options
@@ -316,11 +317,12 @@ def run_download(job_id: str, req: DownloadRequest):
         logging.info(f"Using cookies from {cookie_file}")
 
     # Playlist handling logic
-    # Only enable playlist if it is explicitly a playlist URL, not a video in a playlist
     if "playlist?list=" in req.url:
         logging.info(f"Explicit playlist URL detected: {req.url}. Enabling playlist mode (limit 10).")
         ydl_opts['noplaylist'] = False
         ydl_opts['playlistend'] = 10
+        # For playlist, we need unique filenames
+        ydl_opts['outtmpl'] = os.path.join(TEMP_DIR, f'{job_id}_%(playlist_index)s.%(ext)s')
     elif "list=" in req.url:
         logging.info(f"URL contains list parameter but treated as single video: {req.url}")
 
@@ -334,13 +336,11 @@ def run_download(job_id: str, req: DownloadRequest):
         }]
     else:
         # Video format
-        # Force MP4 merge to ensure browser compatibility and predictable extension
         ydl_opts['merge_output_format'] = 'mp4'
         
         if req.quality == 'best':
             ydl_opts['format'] = 'bestvideo+bestaudio/best'
         else:
-            # Try to get specific height, fallback to best
             ydl_opts['format'] = f'bestvideo[height<={req.quality}]+bestaudio/best[height<={req.quality}]/best'
 
     try:
@@ -351,75 +351,59 @@ def run_download(job_id: str, req: DownloadRequest):
             # Update title from final info
             job.title = info.get('title', job.title)
 
-            # Determine final filename
-            final_filename = None
+            # Find the downloaded file(s)
+            found_files = []
+            if os.path.exists(TEMP_DIR):
+                for f in os.listdir(TEMP_DIR):
+                    # Check for job_id prefix
+                    # Exclude temp files
+                    if f.startswith(job_id) and not f.endswith('.part') and not f.endswith('.ytdl'):
+                        found_files.append(os.path.join(TEMP_DIR, f))
             
-            # Check requested_downloads (populated when merging/converting)
-            if 'requested_downloads' in info:
-                for d in info['requested_downloads']:
-                    if 'filepath' in d:
-                        final_filename = d['filepath']
-                        # If we found a filepath, break. 
-                        # Usually the last one is the merged one? 
-                        # Actually requested_downloads is a list of downloads.
-                        # If merging, it might contain video and audio.
-                        # But the 'filepath' in the info dict itself might be the merged one?
-            
-            if not final_filename:
-                final_filename = info.get('filepath')
-            
-            if not final_filename:
-                # Fallback to prepare_filename (might be wrong extension if converted)
-                final_filename = ydl.prepare_filename(info)
+            if not found_files:
+                logging.warning(f"No files found for job {job_id} in {TEMP_DIR}")
+                job.error_msg = "Download finished but file not found"
+                job.status = JobStatus.ERROR
+                return
 
-            # Verify existence and move to DOWNLOAD_DIR
-            if final_filename and os.path.exists(final_filename):
-                filename_only = os.path.basename(final_filename)
-                dest_path = os.path.join(DOWNLOAD_DIR, filename_only)
+            # Move files to DOWNLOAD_DIR with correct name
+            from yt_dlp.utils import sanitize_filename
+            
+            final_filenames = []
+            for file_path in found_files:
+                ext = os.path.splitext(file_path)[1]
                 
-                # Move file
-                import shutil
-                shutil.move(final_filename, dest_path)
-                logging.info(f"Moved finished file to {dest_path}")
+                # Sanitize title
+                safe_title = sanitize_filename(job.title)
                 
-                job.filename = filename_only
-            else:
-                # Critical fallback: Search directory for the file
-                # Since we use restrictfilenames, the filename should be predictable
-                # But if extension changed...
-                logging.warning(f"File not found at {final_filename}, searching in {TEMP_DIR}")
-                
-                # Try to find a file that matches the title (sanitized)
-                # This is hard because we don't know exactly how it was sanitized
-                # But we can check if job.filename (from progress hook) exists
-                if job.filename:
-                    potential_path = os.path.join(TEMP_DIR, job.filename)
-                    if os.path.exists(potential_path):
-                        logging.info(f"Found file using progress hook filename: {job.filename}")
-                        dest_path = os.path.join(DOWNLOAD_DIR, job.filename)
-                        shutil.move(potential_path, dest_path)
-                        # Keep job.filename as is
-                    else:
-                        # Try with mp4 extension if video
-                        if req.type == 'video':
-                            base, _ = os.path.splitext(job.filename)
-                            mp4_path = os.path.join(TEMP_DIR, base + ".mp4")
-                            if os.path.exists(mp4_path):
-                                job.filename = os.path.basename(mp4_path)
-                                dest_path = os.path.join(DOWNLOAD_DIR, job.filename)
-                                shutil.move(mp4_path, dest_path)
-                                logging.info(f"Found file with mp4 extension: {job.filename}")
-                            else:
-                                job.error_msg = "File missing after download"
-                                job.status = JobStatus.ERROR
-                                return
+                if len(found_files) > 1:
+                    # Try to extract index from filename if possible
+                    fname = os.path.basename(file_path)
+                    try:
+                        # job_id_1.mp4 -> 1
+                        idx_part = fname.replace(job_id + '_', '').split('.')[0]
+                        new_filename = f"{safe_title}_{idx_part}{ext}"
+                    except:
+                        new_filename = f"{safe_title}_{os.path.basename(file_path)}{ext}"
                 else:
-                     job.error_msg = "Could not determine filename"
-                     job.status = JobStatus.ERROR
-                     return
+                    new_filename = f"{safe_title}{ext}"
 
-        job.status = JobStatus.FINISHED
-        logging.info(f"Job {job_id} completed. Filename: {job.filename}")
+                dest_path = os.path.join(DOWNLOAD_DIR, new_filename)
+                
+                # Handle collision
+                counter = 1
+                base_dest = os.path.splitext(dest_path)[0]
+                while os.path.exists(dest_path):
+                    dest_path = f"{base_dest}_{counter}{ext}"
+                    counter += 1
+                
+                shutil.move(file_path, dest_path)
+                final_filenames.append(os.path.basename(dest_path))
+                logging.info(f"Moved {file_path} to {dest_path}")
+
+            job.filename = final_filenames[0] # Set the first one as main
+            job.status = JobStatus.FINISHED
+            logging.info(f"Job {job_id} completed. Filename: {job.filename}")
         
     except Exception as e:
         job.status = JobStatus.ERROR
