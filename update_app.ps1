@@ -148,6 +148,18 @@ try {
     }
 }
 
+# 5. Restart Cloudflared (if it was running or if requested)
+# Since we killed it, we should try to start it back up if the script exists
+if (Test-Path "start_public_hidden.vbs") {
+    Write-Host "`n[5/5] Restarting Cloudflare Tunnel..."
+    try {
+        Invoke-Item "start_public_hidden.vbs"
+        Write-Host "Cloudflare Tunnel started." -ForegroundColor Green
+    } catch {
+        Write-Warning "Failed to start Cloudflare Tunnel: $_"
+    }
+}
+
 Write-Host "`n=== Update Complete ===" -ForegroundColor Cyan
 Stop-Transcript
 Write-Host "Press any key to close..."
