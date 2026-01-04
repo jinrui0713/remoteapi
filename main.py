@@ -43,7 +43,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="6.0.11")
+app = FastAPI(title="yt-dlp API Server", version="7.0.0")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -171,26 +171,17 @@ async def auth_and_limit_middleware(request: Request, call_next):
         return JSONResponse(status_code=403, content={"detail": "Access Denied: Your IP is blocked."})
 
     # Check Load Limit (for new sessions or heavy endpoints)
-    active_clients[client_ip] = time.time()
-    
-    if get_active_client_count() > MAX_CLIENTS:
-        # Allow existing sessions? For now, strict limit on count
-        # But we just added them to active_clients, so if they are the 4th, they get blocked?
-        # Let's say if they were NOT in active_clients before and now count > MAX
-        # But we just added them. So if count > MAX, we block.
-        # To be nice, we should probably allow admin or check if this IP was already active.
-        # Simple logic: If count > MAX, show busy page.
-        # But we need to allow the 3 active users to continue.
-        # The cleanup logic runs in get_active_client_count.
-        pass
-
-    if get_active_client_count() > MAX_CLIENTS:
-         # Check if this specific IP was already active (it is, we just updated it)
-         # We need to know if it's a *new* client pushing us over.
-         # For simplicity, if total > MAX, we reject. 
-         # This might block existing users if a 4th one spams. 
-         # Better: Track "session start" time.
-         return Response(content="現在アクセスが集中しているため、サーバー負荷軽減のためアクセスを制限しています", status_code=503)
+    # Exclude Proxy from Load Limit to prevent blocking Admin due to proxy errors
+    if not request.url.path.startswith("/proxy") and not request.url.path.startswith("/api/proxy"):
+        active_clients[client_ip] = time.time()
+        
+        if get_active_client_count() > MAX_CLIENTS:
+             # Check if this specific IP was already active (it is, we just updated it)
+             # We need to know if it's a *new* client pushing us over.
+             # For simplicity, if total > MAX, we reject. 
+             # This might block existing users if a 4th one spams. 
+             # Better: Track "session start" time.
+             return Response(content="現在アクセスが集中しているため、サーバー負荷軽減のためアクセスを制限しています", status_code=503)
 
     response = await call_next(request)
     return response

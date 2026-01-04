@@ -74,6 +74,7 @@ class ProxyService:
 
         try:
             db_utils.log_event(client_ip, "PROXY_ACCESS", url)
+            # Use shared client
             req = self.client.build_request("GET", url)
             r = await self.client.send(req, stream=True)
             return r
