@@ -43,7 +43,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="7.2.0")
+app = FastAPI(title="yt-dlp API Server", version="7.2.1")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -173,18 +173,25 @@ async def auth_and_limit_middleware(request: Request, call_next):
     if db_utils.is_ip_blocked(client_ip):
         return JSONResponse(status_code=403, content={"detail": "Access Denied: Your IP is blocked."})
 
+    # Check Role for Bypass
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    is_admin = False
+    if token and token in sessions and sessions[token].get('role') == 'admin':
+        is_admin = True
+
     # Check Load Limit (for new sessions or heavy endpoints)
     # Exclude Proxy from Load Limit to prevent blocking Admin due to proxy errors
     if not request.url.path.startswith("/proxy") and not request.url.path.startswith("/api/proxy"):
         active_clients[client_ip] = time.time()
         
-        if get_active_client_count() > MAX_CLIENTS:
+        # Bypass for Admin
+        if not is_admin and get_active_client_count() > MAX_CLIENTS:
              # Check if this specific IP was already active (it is, we just updated it)
              # We need to know if it's a *new* client pushing us over.
              # For simplicity, if total > MAX, we reject. 
              # This might block existing users if a 4th one spams. 
              # Better: Track "session start" time.
-             return Response(content="現在アクセスが集中しているため、サーバー負荷軽減のためアクセスを制限しています", status_code=503)
+             return Response(content="現在アクセスが集中しているため、サーバー負荷軽減のためアクセスを制限しています", status_code=503, media_type="text/plain; charset=utf-8")
 
     response = await call_next(request)
     return response
