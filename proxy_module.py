@@ -78,12 +78,20 @@ class ProxyService:
             r = await self.client.send(req, stream=True)
             return r
         except Exception as e:
+            logging.error(f"Proxy request failed: {e}")
+            # Re-initialize client if it might be broken
+            if "closed" in str(e).lower() or "pool" in str(e).lower():
+                 self.client = httpx.AsyncClient(
+                    verify=False, 
+                    follow_redirects=True,
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                )
             raise HTTPException(status_code=502, detail=f"Proxy error: {e}")
 
     def rewrite_html(self, html_content: bytes, base_url: str) -> str:
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Inject JS for POST navigation
+        # Inject JS for POST navigation and Dynamic Resource Loading
         script = soup.new_tag('script')
         script.string = """
         async function proxyGo(url) {
@@ -109,6 +117,47 @@ class ProxyService:
                 form.submit();
             } catch (e) {
                 alert('Navigation failed');
+            }
+        }
+
+        // Dynamic Resource Rewriter
+        document.addEventListener("DOMContentLoaded", function() {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1) { // Element
+                            // Check img src
+                            if (node.tagName === 'IMG' && node.src && node.src.startsWith('http') && !node.src.includes(window.location.host)) {
+                                rewriteResource(node, 'src');
+                            }
+                            // Check script src
+                            if (node.tagName === 'SCRIPT' && node.src && node.src.startsWith('http') && !node.src.includes(window.location.host)) {
+                                rewriteResource(node, 'src');
+                            }
+                            // Check link href
+                            if (node.tagName === 'LINK' && node.href && node.href.startsWith('http') && !node.href.includes(window.location.host)) {
+                                rewriteResource(node, 'href');
+                            }
+                        }
+                    });
+                });
+            });
+            
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+
+        async function rewriteResource(node, attr) {
+            const originalUrl = node[attr];
+            try {
+                const res = await fetch('/api/proxy/encrypt', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: originalUrl})
+                });
+                const data = await res.json();
+                node[attr] = `/api/proxy/resource?payload=${data.payload}`;
+            } catch (e) {
+                console.error('Failed to rewrite resource:', originalUrl);
             }
         }
         """
@@ -149,17 +198,22 @@ class ProxyService:
         return str(soup)
 
     async def stream_response(self, response: httpx.Response, client_ip: str = "unknown"):
-        total_bytes = 0
-        async for chunk in response.aiter_bytes(CHUNK_SIZE):
-            size = len(chunk)
-            total_bytes += size
-            yield chunk
+        try:
+            total_bytes = 0
+            async for chunk in response.aiter_bytes(CHUNK_SIZE):
+                size = len(chunk)
+                total_bytes += size
+                yield chunk
+                
+                # Rate limiting
+                expected_time = size / MAX_SPEED_BPS
+                await asyncio.sleep(expected_time)
             
-            # Rate limiting
-            expected_time = size / MAX_SPEED_BPS
-            await asyncio.sleep(expected_time)
-        
-        # Log bandwidth after stream finishes (or periodically if needed, but this is simpler)
-        db_utils.log_bandwidth(client_ip, total_bytes, 0, "proxy")
+            # Log bandwidth after stream finishes (or periodically if needed, but this is simpler)
+            db_utils.log_bandwidth(client_ip, total_bytes, 0, "proxy")
+        except Exception as e:
+            logging.error(f"Stream error: {e}")
+        finally:
+            await response.aclose()
 
 proxy_service = ProxyService()
