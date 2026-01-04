@@ -43,7 +43,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="7.0.0")
+app = FastAPI(title="yt-dlp API Server", version="7.2.0")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -99,12 +99,15 @@ else:
 # ダウンロード保存先 (AppData)
 if os.name == 'nt':
     DOWNLOAD_DIR = os.path.join(os.environ['LOCALAPPDATA'], 'YtDlpApiServer', 'downloads')
+    TRASH_DIR = os.path.join(os.environ['LOCALAPPDATA'], 'YtDlpApiServer', 'trash')
 else:
     DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), ".YtDlpApiServer", "downloads")
+    TRASH_DIR = os.path.join(os.path.expanduser("~"), ".YtDlpApiServer", "trash")
 
 # Temp directory for processing
 TEMP_DIR = os.path.join(os.path.dirname(DOWNLOAD_DIR), 'temp')
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+os.makedirs(TRASH_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # Mount downloads directory for static access (playback)
@@ -596,23 +599,28 @@ async def client_info(request: Request, info: Dict = Body(...)):
 # --- File Manager API ---
 
 @app.get("/api/admin/files")
-async def list_files(request: Request, path: str = ""):
+async def list_files(request: Request, path: str = "", root: str = "app"):
     # Auth Check
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token or sessions.get(token, {}).get('role') != 'admin':
         raise HTTPException(status_code=403, detail="Forbidden")
         
-    # Security: Prevent escaping root
-    # We allow browsing DOWNLOAD_DIR and maybe logs
-    # Let's define a ROOT for file manager. 
-    # User asked for "Server files", let's give access to the App Directory but be careful.
-    # execution_dir is where the exe/script is.
+    # Determine Base Directory
+    if root == "downloads":
+        base_dir = DOWNLOAD_DIR
+    elif root == "trash":
+        base_dir = TRASH_DIR
+    else:
+        base_dir = execution_dir
     
-    target_path = os.path.abspath(os.path.join(execution_dir, path))
-    if not target_path.startswith(os.path.abspath(execution_dir)):
+    target_path = os.path.abspath(os.path.join(base_dir, path))
+    if not target_path.startswith(os.path.abspath(base_dir)):
          raise HTTPException(status_code=403, detail="Access Denied")
          
     if not os.path.exists(target_path):
+        # If root is trash/downloads and empty, it might not exist yet or be empty
+        if root in ["downloads", "trash"] and path == "":
+             return {"path": path, "items": []}
         raise HTTPException(status_code=404, detail="Path not found")
         
     if os.path.isfile(target_path):
@@ -634,24 +642,44 @@ async def list_files(request: Request, path: str = ""):
     return {"path": path, "items": items}
 
 @app.delete("/api/admin/files")
-async def delete_file_admin(path: str, request: Request):
+async def delete_file_admin(path: str, request: Request, root: str = "app"):
     # Auth Check
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token or sessions.get(token, {}).get('role') != 'admin':
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    target_path = os.path.abspath(os.path.join(execution_dir, path))
-    if not target_path.startswith(os.path.abspath(execution_dir)):
+    # Determine Base Directory
+    if root == "downloads":
+        base_dir = DOWNLOAD_DIR
+    elif root == "trash":
+        base_dir = TRASH_DIR
+    else:
+        base_dir = execution_dir
+
+    target_path = os.path.abspath(os.path.join(base_dir, path))
+    if not target_path.startswith(os.path.abspath(base_dir)):
          raise HTTPException(status_code=403, detail="Access Denied")
          
     if not os.path.exists(target_path):
         raise HTTPException(status_code=404, detail="Not found")
         
     try:
-        if os.path.isdir(target_path):
-            shutil.rmtree(target_path)
+        # If deleting from Downloads, move to Trash instead?
+        # User asked to "manage" trash.
+        if root == "downloads":
+            # Move to Trash
+            trash_path = os.path.join(TRASH_DIR, os.path.basename(target_path))
+            # Handle collision
+            if os.path.exists(trash_path):
+                base, ext = os.path.splitext(trash_path)
+                trash_path = f"{base}_{int(time.time())}{ext}"
+            shutil.move(target_path, trash_path)
         else:
-            os.remove(target_path)
+            # Permanent delete (from Trash or App)
+            if os.path.isdir(target_path):
+                shutil.rmtree(target_path)
+            else:
+                os.remove(target_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"status": "deleted"}

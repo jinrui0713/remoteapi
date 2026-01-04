@@ -95,11 +95,35 @@
             border-color: #444;
             color: #e0e0e0;
         }
+
+        [data-theme="dark"] .form-control::placeholder {
+            color: #aaa;
+        }
         
         [data-theme="dark"] .form-control:focus, 
         [data-theme="dark"] .form-select:focus {
             background-color: #333;
             color: #fff;
+        }
+
+        [data-theme="dark"] table {
+            color: #e0e0e0 !important;
+        }
+
+        [data-theme="dark"] th {
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] td {
+            color: #ddd !important;
+        }
+
+        [data-theme="dark"] a {
+            color: #6ea8fe;
+        }
+        
+        [data-theme="dark"] a:hover {
+            color: #9ec5fe;
         }
 
         body {
@@ -739,6 +763,7 @@
                                         <tr>
                                             <th>Time</th>
                                             <th>IP</th>
+                                            <th>Device</th>
                                             <th>Event</th>
                                             <th>Details</th>
                                         </tr>
@@ -747,6 +772,12 @@
                                         <tr v-for="log in adminStats.logs" :key="log.id">
                                             <td class="small text-nowrap">{{ new Date(log.timestamp * 1000).toLocaleString() }}</td>
                                             <td class="small font-monospace">{{ log.ip }}</td>
+                                            <td class="small">
+                                                <div v-if="log.user_agent" :title="log.user_agent" class="text-truncate" style="max-width: 150px;">
+                                                    {{ log.screen_res }} <span v-if="log.theme" class="badge bg-secondary" style="font-size: 0.6em">{{ log.theme }}</span>
+                                                </div>
+                                                <div v-else class="text-muted">-</div>
+                                            </td>
                                             <td><span class="badge bg-secondary">{{ log.event_type }}</span></td>
                                             <td class="small text-break">{{ log.details }}</td>
                                         </tr>
@@ -795,11 +826,16 @@
 
                         <!-- File Manager Tab -->
                         <div v-if="adminTab === 'files'">
+                            <div class="mb-3 btn-group w-100">
+                                <button class="btn btn-sm" :class="adminFileRoot === 'app' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('app')">App</button>
+                                <button class="btn btn-sm" :class="adminFileRoot === 'downloads' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('downloads')">Downloads</button>
+                                <button class="btn btn-sm" :class="adminFileRoot === 'trash' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('trash')">Trash</button>
+                            </div>
                             <div class="mb-2 d-flex align-items-center">
                                 <button class="btn btn-sm btn-outline-secondary me-2" @click="loadAdminFiles(getParentPath(adminCurrentPath))" :disabled="!adminCurrentPath">
                                     <i class="bi bi-arrow-up"></i> Up
                                 </button>
-                                <span class="font-monospace small text-muted">{{ adminCurrentPath || '/' }}</span>
+                                <span class="font-monospace small text-muted">{{ adminFileRoot }}:/{{ adminCurrentPath || '' }}</span>
                             </div>
                             <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                                 <table class="table table-sm table-hover table-bordered">
@@ -896,6 +932,7 @@
                     blockIpReason: '',
                     adminFiles: [],
                     adminCurrentPath: '',
+                    adminFileRoot: 'app',
                     theme: 'light'
                 }
             },
@@ -1030,10 +1067,14 @@
                 },
                 
                 // --- File Manager ---
+                async changeAdminRoot(root) {
+                    this.adminFileRoot = root;
+                    this.loadAdminFiles('');
+                },
                 async loadAdminFiles(path) {
                     this.adminTab = 'files';
                     try {
-                        const res = await axios.get('/api/admin/files', { params: { path: path } });
+                        const res = await axios.get('/api/admin/files', { params: { path: path, root: this.adminFileRoot } });
                         this.adminFiles = res.data.items;
                         this.adminCurrentPath = res.data.path;
                     } catch (e) {
@@ -1041,9 +1082,9 @@
                     }
                 },
                 async deleteAdminFile(path) {
-                    if (!confirm(`Delete ${path}? This cannot be undone.`)) return;
+                    if (!confirm(`Delete ${path}?`)) return;
                     try {
-                        await axios.delete('/api/admin/files', { params: { path: path } });
+                        await axios.delete('/api/admin/files', { params: { path: path, root: this.adminFileRoot } });
                         this.loadAdminFiles(this.adminCurrentPath);
                     } catch (e) {
                         alert('Failed to delete: ' + (e.response?.data?.detail || e.message));

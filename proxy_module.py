@@ -196,6 +196,15 @@ class ProxyService:
                     payload = self.encrypt_payload(href, exp_seconds=300)
                     tag['href'] = f"/api/proxy/resource?payload={payload}"
 
+        # Inject Back Button
+        if soup.body:
+            back_btn = soup.new_tag('div')
+            back_btn['style'] = "position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 50%; cursor: pointer; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 24px;"
+            back_btn.string = "←"
+            back_btn['onclick'] = "window.history.back()"
+            back_btn['title'] = "Go Back"
+            soup.body.append(back_btn)
+
         return str(soup)
 
     async def stream_response(self, response: httpx.Response, client_ip: str = "unknown"):

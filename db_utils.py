@@ -127,7 +127,13 @@ def get_logs(limit: int = 100) -> List[Dict]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?", (limit,))
+    # Join with clients table to get UA and device info
+    c.execute('''
+        SELECT logs.*, clients.user_agent, clients.screen_res, clients.window_size, clients.theme 
+        FROM logs 
+        LEFT JOIN clients ON logs.ip = clients.ip 
+        ORDER BY logs.timestamp DESC LIMIT ?
+    ''', (limit,))
     rows = c.fetchall()
     conn.close()
     return [dict(row) for row in rows]
