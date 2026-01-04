@@ -15,7 +15,9 @@ import db_utils
 
 # Configuration
 PROXY_KEY = secrets.token_bytes(32) # In production, this should be persistent
-MAX_SPEED_BPS = 1024 * 1024 # 1MB/s
+MAX_SPEED_BPS = 1024 * 1024 # 1MB/s (Throttled speed)
+BURST_THRESHOLD_BPS = 1.5 * 1024 * 1024 # 1.5MB/s (Trigger threshold)
+BURST_DURATION = 2.0 # Seconds
 CHUNK_SIZE = 64 * 1024 # 64KB
 
 class ProxyService:
@@ -26,6 +28,45 @@ class ProxyService:
             follow_redirects=True,
             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         )
+        # Track client bandwidth usage: IP -> {window_start: float, bytes: int, throttled_until: float}
+        self.client_stats: Dict[str, Dict] = {}
+
+    def _update_stats(self, client_ip: str, chunk_size: int) -> bool:
+        """
+        Updates stats and returns True if request should be throttled.
+        """
+        now = time.time()
+        if client_ip not in self.client_stats:
+            self.client_stats[client_ip] = {
+                "window_start": now,
+                "bytes": 0,
+                "throttled_until": 0
+            }
+        
+        stats = self.client_stats[client_ip]
+        
+        # Check if currently throttled
+        if now < stats["throttled_until"]:
+            return True
+            
+        # Update Window
+        if now - stats["window_start"] > BURST_DURATION:
+            # Calculate speed in previous window
+            duration = now - stats["window_start"]
+            speed = stats["bytes"] / duration
+            
+            # Reset window
+            stats["window_start"] = now
+            stats["bytes"] = 0
+            
+            # Check if we exceeded threshold
+            if speed > BURST_THRESHOLD_BPS:
+                # Throttle for next window (e.g. 5 seconds)
+                stats["throttled_until"] = now + 5.0
+                return True
+        
+        stats["bytes"] += chunk_size
+        return False
 
     def encrypt_payload(self, url: str, exp_seconds: int = 60) -> str:
         nonce = secrets.token_hex(8)
@@ -215,11 +256,19 @@ class ProxyService:
                 total_bytes += size
                 yield chunk
                 
-                # Rate limiting
-                expected_time = size / MAX_SPEED_BPS
-                await asyncio.sleep(expected_time)
+                # Rate limiting Logic
+                # Check if we need to throttle based on recent usage
+                should_throttle = self._update_stats(client_ip, size)
+                
+                if should_throttle:
+                    # Enforce MAX_SPEED_BPS (1MB/s)
+                    expected_time = size / MAX_SPEED_BPS
+                    await asyncio.sleep(expected_time)
+                else:
+                    # No sleep = Max speed
+                    pass
             
-            # Log bandwidth after stream finishes (or periodically if needed, but this is simpler)
+            # Log bandwidth after stream finishes
             db_utils.log_bandwidth(client_ip, total_bytes, 0, "proxy")
         except Exception as e:
             logging.error(f"Stream error: {e}")

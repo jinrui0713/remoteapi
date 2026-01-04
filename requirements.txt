@@ -6,3 +6,4 @@ python-multipart
 cryptography
 beautifulsoup4
 httpx
+aiofiles
