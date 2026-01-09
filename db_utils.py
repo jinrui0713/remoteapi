@@ -180,13 +180,17 @@ def approve_user(user_id: int):
     conn.commit()
     conn.close()
 
-def update_user(user_id: int, password: str = None, role: str = None):
+def update_user(user_id: int, password: str = None, role: str = None, username: str = None, nickname: str = None):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     if password:
         c.execute("UPDATE users SET password = ? WHERE id = ?", (password, user_id))
     if role:
         c.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+    if username:
+        c.execute("UPDATE users SET username = ? WHERE id = ?", (username, user_id))
+    if nickname:
+        c.execute("UPDATE users SET nickname = ? WHERE id = ?", (nickname, user_id))
     conn.commit()
     conn.close()
 

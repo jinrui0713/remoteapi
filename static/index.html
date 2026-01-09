@@ -354,7 +354,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
-                    <small class="text-muted">v8.0.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v8.1.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -840,8 +840,9 @@
                                          <button class="btn btn-primary" @click="searchLogs"><i class="bi bi-search"></i></button>
                                     </div>
                                 </div>
-                                <div class="col-md-2 text-end">
-                                    <button class="btn btn-sm btn-outline-secondary w-100" @click="viewLogFile(currentLogFile)"><i class="bi bi-arrow-clockwise"></i> Load</button>
+                                <div class="col-md-2 text-end d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary w-50" @click="viewLogFile(currentLogFile)" title="Reload"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger w-50" @click="deleteLogFile(currentLogFile)" title="Delete Log"><i class="bi bi-trash"></i></button>
                                 </div>
                             </div>
                             <div class="bg-dark text-light p-2 rounded-2 font-monospace small" style="height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 0.8rem;">{{ logContent || 'Select a log file or search...' }}</div>
@@ -921,6 +922,9 @@
                                                     <button v-if="u.role === 'pending'" class="btn btn-success" @click="approveUser(u.id)" title="Approve">
                                                         <i class="bi bi-check-lg"></i>
                                                     </button>
+                                                    <button class="btn btn-warning text-dark" @click="editUser(u)" title="Edit">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
                                                     <button class="btn btn-danger" @click="deleteUser(u.id)" :disabled="u.role === 'admin' && u.username === 'admin'" title="Delete">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
@@ -937,10 +941,16 @@
 
                         <!-- File Manager Tab -->
                         <div v-if="adminTab === 'files'">
-                            <div class="mb-3 btn-group w-100">
-                                <button class="btn btn-sm" :class="adminFileRoot === 'app' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('app')">App</button>
-                                <button class="btn btn-sm" :class="adminFileRoot === 'downloads' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('downloads')">Downloads</button>
-                                <button class="btn btn-sm" :class="adminFileRoot === 'trash' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('trash')">Trash</button>
+                            <div class="mb-3 d-flex justify-content-between">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm" :class="adminFileRoot === 'app' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('app')">App</button>
+                                    <button class="btn btn-sm" :class="adminFileRoot === 'downloads' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('downloads')">Downloads</button>
+                                    <button class="btn btn-sm" :class="adminFileRoot === 'trash' ? 'btn-primary' : 'btn-outline-secondary'" @click="changeAdminRoot('trash')">Trash</button>
+                                </div>
+                                <div>
+                                    <input type="file" ref="fileUploader" class="d-none" @change="performUpload">
+                                    <button class="btn btn-sm btn-outline-primary" @click="uploadFile"><i class="bi bi-upload"></i> Upload</button>
+                                </div>
                             </div>
                             <div class="mb-2 d-flex align-items-center">
                                 <button class="btn btn-sm btn-outline-secondary me-2" @click="loadAdminFiles(getParentPath(adminCurrentPath))" :disabled="!adminCurrentPath">
@@ -969,9 +979,17 @@
                                             <td class="small">{{ f.is_dir ? '-' : formatSize(f.size) }}</td>
                                             <td class="small">{{ new Date(f.mtime * 1000).toLocaleString() }}</td>
                                             <td>
-                                                <button class="btn btn-sm btn-link text-danger p-0" @click="deleteAdminFile(joinPath(adminCurrentPath, f.name))">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button v-if="!f.is_dir" class="btn btn-primary" @click="editFile(f)" title="Edit">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button class="btn btn-warning text-dark" @click="renameFile(f)" title="Rename">
+                                                        <i class="bi bi-input-cursor-text"></i>
+                                                    </button>
+                                                    <button class="btn btn-danger" @click="deleteAdminFile(joinPath(adminCurrentPath, f.name))" title="Delete">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         <tr v-if="adminFiles.length === 0">
@@ -990,6 +1008,63 @@
                     </div>
                     <div class="modal-body text-center" v-else>
                         <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- User Edit Modal -->
+        <div class="modal fade" id="userEditModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" v-if="editingUser">
+                        <div class="mb-3">
+                            <label class="form-label">Username (Login)</label>
+                            <input type="text" class="form-control" v-model="editingUser.username">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Display Name</label>
+                            <input type="text" class="form-control" v-model="editingUser.nickname">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Role</label>
+                            <select class="form-select" v-model="editingUser.role">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">New Password (Empty to keep)</label>
+                            <input type="password" class="form-control" v-model="editingUser.password">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-primary" @click="saveUser">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Editor Modal -->
+        <div class="modal fade" id="editorModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit File</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" v-if="editingFile">
+                        <div class="mb-2 text-muted small">{{ editingFile.path }}</div>
+                        <textarea class="form-control font-monospace" rows="15" v-model="editingFile.content" style="font-size: 0.9em;"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button class="btn btn-primary" @click="saveEditedFile">Save</button>
                     </div>
                 </div>
             </div>
@@ -1055,7 +1130,11 @@
                     
                     // Search
                     searchResults: [],
-                    isSearching: false
+                    isSearching: false,
+                    
+                    // Edit State
+                    editingUser: null,
+                    editingFile: null
                 }
             },
             methods: {
@@ -1084,10 +1163,20 @@
                 async viewLogFile(filename) {
                     this.currentLogFile = filename;
                     try {
-                        const res = await axios.get('/api/admin/logs/content', { params: { file: filename } });
+                        const res = await axios.get('/api/admin/logs/content', { params: { file: filename, lines: 2000 } });
                         this.logContent = res.data.content;
                     } catch (e) {
                          alert("Failed to load log content: " + e.message);
+                    }
+                },
+                async deleteLogFile(filename) {
+                    if (!confirm(`Delete ${filename}?`)) return;
+                    try {
+                        await axios.delete('/api/admin/logs', { params: { file: filename } });
+                        this.loadLogFiles();
+                        this.logContent = '';
+                    } catch (e) {
+                        alert("Delete failed: " + e.message);
                     }
                 },
                 async searchLogs() {
@@ -1235,6 +1324,27 @@
                 },
                 
                 // --- User Management ---
+                editUser(user) {
+                    this.editingUser = { ...user, password: '' }; 
+                    const modal = new bootstrap.Modal(document.getElementById('userEditModal'));
+                    modal.show();
+                },
+                async saveUser() {
+                    try {
+                        const data = {
+                            role: this.editingUser.role,
+                            username: this.editingUser.username,
+                            nickname: this.editingUser.nickname
+                        };
+                        if (this.editingUser.password) data.password = this.editingUser.password;
+                        
+                        await axios.patch(`/api/admin/users/${this.editingUser.id}`, data);
+                        bootstrap.Modal.getInstance(document.getElementById('userEditModal')).hide();
+                        this.loadAdminUsers();
+                    } catch (e) {
+                        alert("Update failed: " + (e.response?.data?.detail || e.message));
+                    }
+                },
                 async loadAdminUsers() {
                     this.adminTab = 'users';
                     try {
@@ -1264,6 +1374,70 @@
                 },
 
                 // --- File Manager ---
+                async uploadFile() {
+                    this.$refs.fileUploader.click();
+                },
+                async performUpload(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    const form = new FormData();
+                    form.append('file', file);
+                    try {
+                         await axios.post('/api/admin/files/upload', form, { 
+                            params: { path: this.adminCurrentPath, root: this.adminFileRoot },
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                         });
+                         this.loadAdminFiles(this.adminCurrentPath);
+                    } catch (e) {
+                        alert('Upload failed: ' + e.message);
+                    }
+                    event.target.value = '';
+                },
+                async renameFile(file) {
+                    const newName = prompt("New Name:", file.name);
+                    if (!newName || newName === file.name) return;
+                    try {
+                        await axios.post('/api/admin/files/rename', {
+                            path: this.joinPath(this.adminCurrentPath, file.name),
+                            new_name: newName,
+                            root: this.adminFileRoot
+                        });
+                        this.loadAdminFiles(this.adminCurrentPath);
+                    } catch (e) {
+                        alert('Rename failed: ' + e.message);
+                    }
+                },
+                async editFile(file) {
+                    try {
+                         const path = this.joinPath(this.adminCurrentPath, file.name);
+                         const url = `/api/admin/files?path=${encodeURIComponent(path)}&root=${this.adminFileRoot}`;
+                         // Fetch as text because we only edit text files
+                         const res = await axios.get(url, { responseType: 'text' });
+                         if (typeof res.data !== 'string') {
+                             throw new Error("Content is not text");
+                         }
+                         
+                         this.editingFile = { path: path, content: res.data };
+                         const modal = new bootstrap.Modal(document.getElementById('editorModal'));
+                         modal.show();
+                    } catch (e) {
+                         alert("Cannot edit this file (maybe binary?)");
+                    }
+                },
+                async saveEditedFile() {
+                    try {
+                        await axios.post('/api/admin/files/content', {
+                            path: this.editingFile.path,
+                            content: this.editingFile.content,
+                            root: this.adminFileRoot
+                        });
+                        bootstrap.Modal.getInstance(document.getElementById('editorModal')).hide();
+                        alert("Saved");
+                    } catch (e) {
+                        alert("Save failed: " + e.message);
+                    }
+                },
                 async changeAdminRoot(root) {
                     this.adminFileRoot = root;
                     this.loadAdminFiles('');

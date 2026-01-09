@@ -121,13 +121,17 @@ class ProxyService:
             return r
         except Exception as e:
             logging.error(f"Proxy request failed: {e}")
-            # Re-initialize client if it might be broken
-            if "closed" in str(e).lower() or "pool" in str(e).lower():
-                 self.client = httpx.AsyncClient(
-                    verify=False, 
-                    follow_redirects=True,
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-                )
+            # Always recreate the client on error to ensure fresh state
+            try:
+                await self.client.aclose()
+            except:
+                pass
+            
+            self.client = httpx.AsyncClient(
+                verify=False, 
+                follow_redirects=True,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            )
             raise HTTPException(status_code=502, detail=f"Proxy error: {e}")
 
     def rewrite_html(self, html_content: bytes, base_url: str) -> str:

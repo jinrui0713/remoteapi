@@ -48,7 +48,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.0.0")
+app = FastAPI(title="yt-dlp API Server", version="8.1.0")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -548,6 +548,8 @@ class RegisterRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     password: Optional[str] = None
     role: Optional[str] = None
+    username: Optional[str] = None
+    nickname: Optional[str] = None
 
 class ClientInfo(BaseModel):
     user_agent: str
@@ -567,7 +569,7 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
         # Check cookie
         client_id = request.cookies.get('CLIENT_ID')
         if not client_id:
-             client_id = str(uuid.uuid4())
+             client_id = str(uuid.uuid4())[:12]
     
     # Check Username
     token = request.cookies.get(AUTH_COOKIE_NAME)
@@ -725,7 +727,7 @@ async def update_user_endpoint(user_id: int, req: UserUpdateRequest, request: Re
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token or sessions.get(token, {}).get('role') != 'admin':
         raise HTTPException(status_code=403)
-    db_utils.update_user(user_id, password=req.password, role=req.role)
+    db_utils.update_user(user_id, password=req.password, role=req.role, username=req.username, nickname=req.nickname)
     return {"message": "User updated"}
 
 @app.get("/api/admin/users/{user_id}/stats")
@@ -756,7 +758,7 @@ async def list_log_files(request: Request):
     return sorted(files, key=lambda x: x['mtime'], reverse=True)
 
 @app.get("/api/admin/logs/content")
-async def get_log_content(file: str, request: Request):
+async def get_log_content(file: str, request: Request, lines: int = 2000):
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token or sessions.get(token, {}).get('role') != 'admin':
         raise HTTPException(status_code=403)
@@ -769,11 +771,43 @@ async def get_log_content(file: str, request: Request):
         raise HTTPException(status_code=404, detail="File not found")
         
     try:
-        async with aiofiles.open(file, mode='r', encoding='utf-8', errors='replace') as f:
-            content = await f.read()
-            return {"content": content}
+        # Read last N lines approximately
+        # Check size
+        size = os.path.getsize(file)
+        if size > 1024 * 1024:
+            # Read last 512KB
+            seek_pos = max(0, size - (512 * 1024))
+            async with aiofiles.open(file, mode='r', encoding='utf-8', errors='replace') as f:
+                await f.seek(seek_pos)
+                content = await f.read()
+                # We might have started in middle of line
+                if seek_pos > 0:
+                    content = content.partition('\n')[2]
+                return {"content": content}
+        else:
+            async with aiofiles.open(file, mode='r', encoding='utf-8', errors='replace') as f:
+                content = await f.read()
+                return {"content": content}
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/admin/logs")
+async def delete_logs(request: Request, file: str):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    
+    # Security check
+    if not file.startswith("server.log") or ".." in file or "/" in file or "\\" in file:
+         raise HTTPException(status_code=400, detail="Invalid file")
+         
+    if os.path.exists(file):
+        try:
+            os.remove(file)
+            return {"message": "Deleted"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/api/admin/logs/search")
 async def search_logs(q: str, request: Request):
@@ -807,7 +841,7 @@ async def client_info(request: Request, info: Dict = Body(...)):
     
     # Create a unique ID based on the info provided
     fingerprint_str = f"{info.get('ua')}{info.get('screen')}{info.get('depth')}{client_ip}"
-    client_id = hashlib.md5(fingerprint_str.encode()).hexdigest()
+    client_id = hashlib.md5(fingerprint_str.encode()).hexdigest()[:12]
     
     db_utils.update_client_info(client_id, client_ip, info)
     return {"status": "ok", "client_id": client_id}
@@ -899,6 +933,103 @@ async def delete_file_admin(path: str, request: Request, root: str = "app"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"status": "deleted"}
+
+class RenameRequest(BaseModel):
+    path: str
+    new_name: str
+    root: str = "app"
+
+@app.post("/api/admin/files/rename")
+async def rename_file_admin(req: RenameRequest, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Determine Base Directory
+    if req.root == "downloads":
+        base_dir = DOWNLOAD_DIR
+    elif req.root == "trash":
+        base_dir = TRASH_DIR
+    else:
+        base_dir = execution_dir
+        
+    old_path = os.path.abspath(os.path.join(base_dir, req.path))
+    new_path = os.path.abspath(os.path.join(os.path.dirname(old_path), req.new_name))
+    
+    if not old_path.startswith(os.path.abspath(base_dir)) or not new_path.startswith(os.path.abspath(base_dir)):
+         raise HTTPException(status_code=403, detail="Access Denied")
+         
+    if not os.path.exists(old_path):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    try:
+        os.rename(old_path, new_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "Renamed"}
+
+@app.post("/api/admin/files/upload")
+async def upload_file_admin(request: Request, file: UploadFile = File(...), path: str = "", root: str = "app"):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Determine Base Directory
+    if root == "downloads":
+        base_dir = DOWNLOAD_DIR
+    elif root == "trash":
+        base_dir = TRASH_DIR
+    else:
+        base_dir = execution_dir
+        
+    target_dir = os.path.abspath(os.path.join(base_dir, path))
+    if not target_dir.startswith(os.path.abspath(base_dir)):
+         raise HTTPException(status_code=403, detail="Access Denied")
+    
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir, exist_ok=True)
+        
+    file_path = os.path.join(target_dir, file.filename)
+    try:
+        async with aiofiles.open(file_path, 'wb') as f:
+            while True:
+                chunk = await file.read(64 * 1024)
+                if not chunk:
+                    break
+                await f.write(chunk)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "Uploaded"}
+
+class FileContentRequest(BaseModel):
+    path: str
+    content: str
+    root: str = "app"
+
+@app.post("/api/admin/files/content")
+async def save_file_content(req: FileContentRequest, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Determine Base Directory
+    if req.root == "downloads":
+        base_dir = DOWNLOAD_DIR
+    elif req.root == "trash":
+        base_dir = TRASH_DIR
+    else:
+        base_dir = execution_dir
+        
+    target_path = os.path.abspath(os.path.join(base_dir, req.path))
+    if not target_path.startswith(os.path.abspath(base_dir)):
+         raise HTTPException(status_code=403, detail="Access Denied")
+         
+    try:
+        async with aiofiles.open(target_path, 'w', encoding='utf-8') as f:
+            await f.write(req.content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "Saved"}
 
 class BlockIPRequest(BaseModel):
     ip: str
@@ -1109,7 +1240,7 @@ async def search_youtube_endpoint(q: str):
         def search():
             ydl_opts = {
                 'quiet': True,
-                'extract_flat': True, # Just get metadata, don't resolve formats
+                'extract_flat': 'in_playlist', # Better for search results
                 'default_search': 'ytsearch10',
                 'noplaylist': True,
             }
