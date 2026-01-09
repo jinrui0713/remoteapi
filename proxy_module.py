@@ -209,16 +209,20 @@ class ProxyService:
         else:
             soup.append(script)
 
-        # Rewrite links
+        # Rewrite links and resources
         for tag in soup.find_all(['a', 'link', 'script', 'img', 'iframe', 'form']):
             # Handle href (Navigation)
             if tag.name == 'a' and tag.has_attr('href'):
                 url = tag['href']
-                # Resolve relative URLs
+                # Join with base URL
                 full_url = urljoin(base_url, url)
                 
                 # Check if it's a valid http/https link (not javascript:, mailto:, etc)
                 if full_url.startswith(('http://', 'https://')):
+                    # Check target="_blank"
+                    if tag.has_attr('target'):
+                         del tag['target'] 
+                    
                     tag['href'] = '#'
                     tag['onclick'] = f"proxyGo('{full_url}'); return false;"
             
@@ -230,10 +234,11 @@ class ProxyService:
                     payload = self.encrypt_payload(full_src, exp_seconds=300)
                     tag['src'] = f"/api/proxy/resource?payload={payload}"
             
-            # Handle link href (CSS, Favicons)
+            # Handle link href (CSS, Favicons) - EXCLUDE if it was already handled as 'a' (unlikely for link tag)
             if tag.name == 'link' and tag.has_attr('href'):
                 href = tag['href']
                 full_href = urljoin(base_url, href)
+                # Stylesheets and icons should be proxied as resources
                 if full_href.startswith(('http://', 'https://')):
                     payload = self.encrypt_payload(full_href, exp_seconds=300)
                     tag['href'] = f"/api/proxy/resource?payload={payload}"
@@ -242,43 +247,182 @@ class ProxyService:
             if tag.name == 'form' and tag.has_attr('action'):
                 action = tag['action']
                 full_action = urljoin(base_url, action)
-                if full_action.startswith(('http://', 'https://')):
-                    # Rewrite to use proxyGo (via onsubmit interception if possible, 
-                    # but simple forms are hard to proxy with just HTML rewriting.
-                    # Best effort: change action to # and use JS to submit via proxy)
-                    tag['action'] = '#'
-                    tag['onsubmit'] = f"event.preventDefault(); proxyGo('{full_action}' + '?' + new URLSearchParams(new FormData(this)).toString());"
-
-        # Inject Back Button
-        if soup.body:
-            back_btn = soup.new_tag('div')
-            back_btn['style'] = "position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 50%; cursor: pointer; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 24px;"
-            back_btn.string = "←"
-            back_btn['onclick'] = "window.history.back()"
-            back_btn['title'] = "Go Back"
-            soup.body.append(back_btn)
+                # Form handling is tricky. We rewrite action to # and intercept onsubmit
+                tag['action'] = '#'
+                tag['onsubmit'] = f"""
+                    event.preventDefault(); 
+                    const formData = new FormData(this);
+                    const params = new URLSearchParams(formData);
+                    let url = '{full_action}';
+                    if (this.method.toUpperCase() === 'GET') {{
+                        url += '?' + params.toString();
+                        proxyGo(url);
+                    }} else {{
+                        // POST not fully supported in this simple rewrite without JS-based fetch proxy
+                        // Fallback to GET for now or alert
+                        alert('Complex form submission not fully supported in this mode');
+                    }}
+                """
+        
+        # Meta Refresh Handling
+        for meta in soup.find_all('meta', attrs={"http-equiv": lambda x: x and x.lower() == 'refresh'}):
+            if meta.has_attr('content'):
+                content = meta['content']
+                parts = content.split(';')
+                if len(parts) > 1:
+                    # url=...
+                    delay = parts[0]
+                    url_part = parts[1].strip()
+                    if url_part.lower().startswith('url='):
+                        target_url = url_part[4:]
+                        full_target = urljoin(base_url, target_url)
+                        # Rewrite content to point to proxy
+                        # We can't easily rewrite the content string to hit POST /proxy.
+                        # Instead, we replace meta refresh with JS redirect
+                        meta.decompose()
+                        
+                        refresh_script = soup.new_tag('script')
+                        refresh_script.string = f"setTimeout(function() {{ proxyGo('{full_target}'); }}, {delay} * 1000);"
+                        if soup.head:
+                            soup.head.append(refresh_script)
 
         return str(soup)
 
     async def stream_response(self, response: httpx.Response, client_ip: str = "unknown"):
         try:
             total_bytes = 0
-            async for chunk in response.aiter_bytes(CHUNK_SIZE):
-                size = len(chunk)
-                total_bytes += size
-                yield chunk
+            
+            # Check content type for HTML
+            content_type = response.headers.get("content-type", "")
+            if "text/html" in content_type:
+                # Buffer HTML for rewriting
+                content = await response.read()
+                total_bytes = len(content)
                 
-                # Rate limiting Logic
-                # Check if we need to throttle based on recent usage
-                should_throttle = self._update_stats(client_ip, size)
+                # Check for encoding
+                encoding = response.encoding or 'utf-8'
+                try:
+                    text = content.decode(encoding, errors='replace')
+                except:
+                    text = content.decode('utf-8', errors='replace')
+                    
+                # Rewrite HTML
+                base_url = str(response.url)
+                soup = BeautifulSoup(text, 'html.parser')
                 
-                if should_throttle:
-                    # Enforce MAX_SPEED_BPS (1MB/s)
-                    expected_time = size / MAX_SPEED_BPS
-                    await asyncio.sleep(expected_time)
+                # Title Change
+                if soup.title:
+                    soup.title.string = "東進学力POS"
                 else:
-                    # No sleep = Max speed
-                    pass
+                    new_title = soup.new_tag("title")
+                    new_title.string = "東進学力POS"
+                    if soup.head:
+                        soup.head.append(new_title)
+                
+                # Inject Scripts & Styles
+                script = soup.new_tag('script')
+                script.string = """
+                // --- Proxy Helper ---
+                function proxyGo(url) {
+                    try {
+                        // Check if relative or absolute
+                        fetch('/api/proxy/encrypt', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({url: url})
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            const form = document.createElement('form');
+                            form.method = 'POST';
+                            form.action = '/proxy';
+                            
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = 'payload';
+                            input.value = data.payload;
+                            
+                            form.appendChild(input);
+                            document.body.appendChild(form);
+                            form.submit();
+                        })
+                        .catch(e => alert('Navigation failed: ' + e));
+                    } catch(e) {
+                        alert(e);
+                    }
+                }
+                
+                // Auto Refresh / Redirect Interception
+                // Overwrite window.location
+                // This is hard to do perfectly, but we can try to intercept assignments
+                /* 
+                // Too aggressive/broken to intercept location assignment directly
+                */
+                
+                // Control Bar
+                document.addEventListener('DOMContentLoaded', () => {
+                    const bar = document.createElement('div');
+                    bar.style.cssText = "position:fixed;bottom:0;left:0;width:100%;background:#333;color:white;padding:10px;display:flex;gap:10px;align-items:center;z-index:2147483647;font-family:sans-serif;box-shadow:0 -2px 10px rgba(0,0,0,0.5);";
+                    
+                    const btnStyle = "background:#555;border:1px solid #777;color:white;padding:5px 10px;cursor:pointer;border-radius:4px;";
+                    
+                    const backBtn = document.createElement('button');
+                    backBtn.innerText = '←';
+                    backBtn.style.cssText = btnStyle;
+                    backBtn.onclick = () => window.history.back();
+                    
+                    const fwdBtn = document.createElement('button');
+                    fwdBtn.innerText = '→';
+                    fwdBtn.style.cssText = btnStyle;
+                    fwdBtn.onclick = () => window.history.forward();
+
+                    const homeBtn = document.createElement('button');
+                    homeBtn.innerText = '🏠';
+                    homeBtn.style.cssText = btnStyle;
+                    homeBtn.onclick = () => window.location.href = '/';
+                    
+                    const searchInput = document.createElement('input');
+                    searchInput.type = 'text';
+                    searchInput.placeholder = 'URL or Search...';
+                    searchInput.style.cssText = "flex-grow:1;padding:5px;border-radius:4px;border:none;";
+                    searchInput.onkeydown = (e) => {
+                        if (e.key === 'Enter') {
+                            let val = searchInput.value.trim();
+                            if (!val.startsWith('http') && !val.includes('.')) {
+                                val = 'https://www.google.com/search?q=' + encodeURIComponent(val);
+                            } else if (!val.startsWith('http')) {
+                                val = 'http://' + val;
+                            }
+                            proxyGo(val);
+                        }
+                    };
+
+                    bar.appendChild(backBtn);
+                    bar.appendChild(fwdBtn);
+                    bar.appendChild(homeBtn);
+                    bar.appendChild(searchInput);
+                    document.body.appendChild(bar);
+                    
+                    // Adjust body margin
+                    document.body.style.marginBottom = "60px";
+                });
+                """
+                if soup.body:
+                    soup.body.append(script)
+                
+                # Send rewritten HTML
+                yield str(soup).encode(encoding, errors='replace')
+                
+            else:
+                # Streaming for non-HTML
+                async for chunk in response.aiter_bytes(CHUNK_SIZE):
+                    size = len(chunk)
+                    total_bytes += size
+                    yield chunk
+                    
+                    if self._update_stats(client_ip, size):
+                        expected_time = size / MAX_SPEED_BPS
+                        await asyncio.sleep(expected_time)
             
             # Log bandwidth after stream finishes
             db_utils.log_bandwidth(client_ip, total_bytes, 0, "proxy")

@@ -1,9 +1,13 @@
 import os
 import sys
 import logging
+from logging.handlers import RotatingFileHandler
 
-# Configure logging to both file and console
-handlers = [logging.FileHandler('server.log'), logging.StreamHandler(sys.stdout)]
+# Configure logging with rotation (1MB per file, max 5 backups)
+handlers = [
+    RotatingFileHandler('server.log', maxBytes=1024*1024, backupCount=5, encoding='utf-8'),
+    logging.StreamHandler(sys.stdout)
+]
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -44,7 +48,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="7.2.4")
+app = FastAPI(title="yt-dlp API Server", version="8.0.0")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -241,6 +245,10 @@ class DownloadJob(BaseModel):
     title: Optional[str] = None
     error_msg: Optional[str] = None
     created_at: float
+    # Metadata
+    client_ip: Optional[str] = None
+    username: Optional[str] = None
+    client_id: Optional[str] = None
 
 # In-memory job store
 jobs: Dict[str, DownloadJob] = {}
@@ -279,6 +287,15 @@ def progress_hook(d, job_id):
             job.progress = 100
             job.status = JobStatus.FINISHED
             job.filename = os.path.basename(d.get('filename', ''))
+            
+            # Log successful download
+            details = f"Download Finished: {job.title or job.url} ({job.filename})"
+            if job.username:
+                 details += f" User: {job.username}"
+            if job.client_id:
+                 details += f" CID: {job.client_id}"
+            
+            db_utils.log_event(job.client_ip or "unknown", "DOWNLOAD", details)
 
 def run_download(job_id: str, req: DownloadRequest):
     """Execute download in thread pool"""
@@ -439,13 +456,27 @@ async def download_file(filename: str):
     return FileResponse(file_path, media_type='application/octet-stream', filename=filename)
 
 @app.post("/download")
-async def start_download(request: DownloadRequest):
+async def start_download(request: DownloadRequest, req: Request):
     job_id = str(uuid.uuid4())
+    
+    # Metadata extraction
+    username = None
+    token = req.cookies.get(AUTH_COOKIE_NAME)
+    if token:
+         sess = sessions.get(token)
+         if sess:
+             username = sess.get('username')
+    
+    client_id = req.cookies.get('CLIENT_ID')
+    
     job = DownloadJob(
         id=job_id,
         url=request.url,
         status=JobStatus.QUEUED,
-        created_at=time.time()
+        created_at=time.time(),
+        client_ip=req.client.host,
+        username=username,
+        client_id=client_id
     )
     jobs[job_id] = job
     
@@ -508,14 +539,82 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class RegisterRequest(BaseModel):
+    nickname: str
+    password: str
+    ua: str
+    screen: str
+
+class UserUpdateRequest(BaseModel):
+    password: Optional[str] = None
+    role: Optional[str] = None
+
+class ClientInfo(BaseModel):
+    user_agent: str
+    screen_res: str
+    window_size: str
+    color_depth: int
+    theme: Optional[str] = None
+    orientation: Optional[str] = None
+    device_name: Optional[str] = "Unknown"
+    client_id: Optional[str] = None
+
+@app.post("/api/client/handshake")
+async def client_handshake(info: ClientInfo, request: Request, response: Response):
+    # Determine Client ID
+    client_id = info.client_id
+    if not client_id or client_id == 'null' or client_id == 'undefined':
+        # Check cookie
+        client_id = request.cookies.get('CLIENT_ID')
+        if not client_id:
+             client_id = str(uuid.uuid4())
+    
+    # Check Username
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    username = None
+    if token:
+        session = sessions.get(token)
+        if session:
+            username = session.get('username')
+    
+    # Log Session Start (Detailed)
+    log_msg = f"Session Start: User={username or 'Guest'}, ID={client_id}, Device={info.device_name}, Screen={info.screen_res}, UA={info.user_agent}"
+    logging.info(log_msg)
+    
+    # Update DB
+    db_info = {
+        "ua": info.user_agent,
+        "screen": info.screen_res,
+        "window": info.window_size,
+        "depth": info.color_depth,
+        "theme": info.theme,
+        "orientation": info.orientation,
+        "device_name": info.device_name
+    }
+    db_utils.update_client_info(client_id, request.client.host, db_info, username)
+    
+    # Set Cookies (Long lived)
+    response.set_cookie(key='CLIENT_ID', value=client_id, max_age=31536000, httponly=False) 
+    if username:
+        response.set_cookie(key='USERNAME', value=username, max_age=31536000, httponly=False)
+    
+    return {"client_id": client_id, "username": username}
+
 @app.post("/api/login")
 async def login(req: LoginRequest, response: Response, request: Request):
-    if req.username in USERS and USERS[req.username] == req.password:
+    # db_utils.init_db() ensures admin/user exists.
+    role = db_utils.authenticate_user(req.username, req.password)
+    
+    # Fallback to hardcoded USERS if DB auth fails (for transition safety)
+    if not role and req.username in USERS and USERS[req.username] == req.password:
+        role = "admin" if req.username == "admin" else "user"
+
+    if role:
         # Create session
         session_token = secrets.token_urlsafe(32)
         sessions[session_token] = {
             "exp": time.time() + (12 * 3600), # 12 hours
-            "role": "admin" if req.username == "admin" else "user",
+            "role": role,
             "ip": request.client.host
         }
         
@@ -525,13 +624,35 @@ async def login(req: LoginRequest, response: Response, request: Request):
             key=AUTH_COOKIE_NAME,
             value=session_token,
             httponly=True,
-            secure=False, # Set True if HTTPS is guaranteed
+            secure=False, 
             max_age=12 * 3600
         )
-        return {"message": "Logged in"}
+        return {"message": "Logged in", "role": role}
     else:
         db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials or account pending approval")
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest, request: Request):
+    nickname = req.nickname.strip()
+    password = req.password.strip()
+    
+    if len(nickname) < 3 or len(password) < 4:
+         raise HTTPException(status_code=400, detail="Nickname (3+) or Password (4+) too short")
+         
+    success = db_utils.register_user_request(
+        nickname=nickname,
+        password=password,
+        ip=request.client.host,
+        ua=req.ua,
+        screen=req.screen
+    )
+    
+    if not success:
+         raise HTTPException(status_code=400, detail="Username already taken")
+         
+    return {"message": "Registration requested. Please wait for admin approval."}
+
 
 @app.get("/api/admin/stats")
 async def admin_stats(request: Request):
@@ -558,17 +679,124 @@ async def admin_stats(request: Request):
         logs = db_utils.get_logs(limit=50)
         bandwidth = db_utils.get_bandwidth_stats()
         blocked_ips = db_utils.get_blocked_ips()
-        
-        # Get Client List (Fingerprints)
-        # We need to add a function to db_utils for this, or just query here.
-        # Let's add it to db_utils later, for now just raw query or skip if not ready.
-        # Actually, let's add it to db_utils now.
         clients = db_utils.get_clients()
 
         return {
             "active_clients": get_active_client_count(),
             "sessions": len(sessions),
             "clients_list": current_clients,
+            "disk": {"total": total, "used": used, "free": free},
+            "logs": logs,
+            "bandwidth": bandwidth,
+            "blocked_ips": blocked_ips,
+            "clients": clients
+        }
+    except Exception as e:
+        logging.error(f"Admin stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Admin User Management ---
+
+@app.get("/api/admin/users")
+async def get_users(request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    return db_utils.get_all_users()
+
+@app.post("/api/admin/users/{user_id}/approve")
+async def approve_user_endpoint(user_id: int, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    db_utils.approve_user(user_id)
+    return {"message": "User approved"}
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user_endpoint(user_id: int, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    db_utils.delete_user(user_id)
+    return {"message": "User deleted"}
+
+@app.patch("/api/admin/users/{user_id}")
+async def update_user_endpoint(user_id: int, req: UserUpdateRequest, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    db_utils.update_user(user_id, password=req.password, role=req.role)
+    return {"message": "User updated"}
+
+@app.get("/api/admin/users/{user_id}/stats")
+async def get_user_stats_endpoint(user_id: int, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    return db_utils.get_user_stats(user_id)
+
+# --- Admin Log Management ---
+
+@app.get("/api/admin/logs/files")
+async def list_log_files(request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    
+    files = []
+    base_name = 'server.log'
+    if os.path.exists(base_name):
+        files.append({"name": base_name, "mtime": os.path.getmtime(base_name), "size": os.path.getsize(base_name)})
+    
+    for i in range(1, 10):
+        fname = f"{base_name}.{i}"
+        if os.path.exists(fname):
+             files.append({"name": fname, "mtime": os.path.getmtime(fname), "size": os.path.getsize(fname)})
+    
+    return sorted(files, key=lambda x: x['mtime'], reverse=True)
+
+@app.get("/api/admin/logs/content")
+async def get_log_content(file: str, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    
+    # Basic security path traversal check
+    if not file.startswith("server.log") or ".." in file or "/" in file or "\\" in file:
+         raise HTTPException(status_code=400, detail="Invalid file")
+
+    if not os.path.exists(file):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    try:
+        async with aiofiles.open(file, mode='r', encoding='utf-8', errors='replace') as f:
+            content = await f.read()
+            return {"content": content}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/logs/search")
+async def search_logs(q: str, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403)
+    
+    results = []
+    base_name = 'server.log'
+    candidates = [base_name] + [f"{base_name}.{i}" for i in range(1, 10)]
+    
+    for fname in candidates:
+        if os.path.exists(fname):
+            try:
+                async with aiofiles.open(fname, mode='r', encoding='utf-8', errors='replace') as f:
+                    content = await f.read()
+                    lines = content.splitlines()
+                    for line in lines:
+                        if q.lower() in line.lower():
+                            results.append({"file": fname, "line": line.strip()})
+            except:
+                continue
+    return results[:1000]
             "disk_usage": {
                 "total": total,
                 "used": used,
@@ -893,6 +1121,34 @@ async def system_info(request: Request):
         "role": role
     }
 
+@app.get("/api/search")
+async def search_youtube_endpoint(q: str):
+    """Search YouTube for videos"""
+    try:
+        def search():
+            ydl_opts = {
+                'quiet': True,
+                'extract_flat': True, # Just get metadata, don't resolve formats
+                'default_search': 'ytsearch10',
+                'noplaylist': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # If q is not a url, ytsearch10: is prefixed by default_search
+                # We need to handle URL vs Search Query manually because extract_flat for URL returns different structure
+                
+                res = ydl.extract_info(q, download=False)
+                if 'entries' in res:
+                    return res['entries']
+                # If it's a direct match or single video from search logic
+                return [res] if res else []
+        
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(executor, search)
+        return results
+    except Exception as e:
+        logging.error(f"Search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/logout")
 async def logout(response: Response, request: Request):
     token = request.cookies.get(AUTH_COOKIE_NAME)
@@ -904,8 +1160,12 @@ async def logout(response: Response, request: Request):
     return {"message": "Logged out"}
 
 @app.post("/system/cookies")
-async def upload_cookies(file: UploadFile = File(...)):
+async def upload_cookies(request: Request, file: UploadFile = File(...)):
     """Upload cookies.txt file"""
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or sessions.get(token, {}).get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     try:
         file_location = os.path.join(execution_dir, "cookies.txt")
         with open(file_location, "wb+") as file_object:
