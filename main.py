@@ -44,7 +44,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="7.2.3")
+app = FastAPI(title="yt-dlp API Server", version="7.2.4")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -299,6 +299,8 @@ def run_download(job_id: str, req: DownloadRequest):
         'restrictfilenames': True, 
         'windowsfilenames': True,
         'noplaylist': True,
+        # Automatic Cookie Handling: try to load from browser if cookies.txt is missing
+        'cookiesfrombrowser': ('chrome', 'edge', 'firefox'),
     }
 
     # Subtitle options
@@ -310,11 +312,13 @@ def run_download(job_id: str, req: DownloadRequest):
             'embedsubtitles': req.embed_subtitles,
         })
 
-    # Check for cookies.txt
+    # Check for cookies.txt (Overrides browser cookies)
     cookie_file = os.path.join(execution_dir, "cookies.txt")
     if os.path.exists(cookie_file):
         ydl_opts['cookiefile'] = cookie_file
         logging.info(f"Using cookies from {cookie_file}")
+        if 'cookiesfrombrowser' in ydl_opts:
+            del ydl_opts['cookiesfrombrowser'] # Priority to file
 
     # Playlist handling logic
     if "playlist?list=" in req.url:
@@ -335,13 +339,15 @@ def run_download(job_id: str, req: DownloadRequest):
             'preferredquality': '192',
         }]
     else:
-        # Video format
+        # Video format - FORCE H.264 (avc1) for maximum compatibility
         ydl_opts['merge_output_format'] = 'mp4'
         
+        # Prioritize AVC(h.264) video + AAC audio. Fallback to best mp4, then best.
+        # This selector tries to find video with codec starting with 'avc' (h264)
         if req.quality == 'best':
-            ydl_opts['format'] = 'bestvideo+bestaudio/best'
+            ydl_opts['format'] = 'bestvideo[vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         else:
-            ydl_opts['format'] = f'bestvideo[height<={req.quality}]+bestaudio/best[height<={req.quality}]/best'
+            ydl_opts['format'] = f'bestvideo[vcodec^=avc][height<={req.quality}]+bestaudio[ext=m4a]/bestvideo[height<={req.quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={req.quality}][ext=mp4]/best[height<={req.quality}]'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -350,6 +356,7 @@ def run_download(job_id: str, req: DownloadRequest):
             
             # Update title from final info
             job.title = info.get('title', job.title)
+            channel_name = info.get('channel', 'UnknownChannel')
 
             # Find the downloaded file(s)
             found_files = []
@@ -373,8 +380,16 @@ def run_download(job_id: str, req: DownloadRequest):
             for file_path in found_files:
                 ext = os.path.splitext(file_path)[1]
                 
-                # Sanitize title
+                # Sanitize title and channel
                 safe_title = sanitize_filename(job.title)
+                safe_channel = sanitize_filename(channel_name)
+                
+                # Construct Desired Filename: Channel - Title
+                # If channel is missing, just use title
+                if safe_channel:
+                    base_name = f"{safe_channel} - {safe_title}"
+                else:
+                    base_name = safe_title
                 
                 if len(found_files) > 1:
                     # Try to extract index from filename if possible
@@ -382,11 +397,11 @@ def run_download(job_id: str, req: DownloadRequest):
                     try:
                         # job_id_1.mp4 -> 1
                         idx_part = fname.replace(job_id + '_', '').split('.')[0]
-                        new_filename = f"{safe_title}_{idx_part}{ext}"
+                        new_filename = f"{base_name}_{idx_part}{ext}"
                     except:
-                        new_filename = f"{safe_title}_{os.path.basename(file_path)}{ext}"
+                        new_filename = f"{base_name}_{os.path.basename(file_path)}{ext}"
                 else:
-                    new_filename = f"{safe_title}{ext}"
+                    new_filename = f"{base_name}{ext}"
 
                 dest_path = os.path.join(DOWNLOAD_DIR, new_filename)
                 

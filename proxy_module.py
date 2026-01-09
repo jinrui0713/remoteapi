@@ -132,6 +132,7 @@ class ProxyService:
 
     def rewrite_html(self, html_content: bytes, base_url: str) -> str:
         soup = BeautifulSoup(html_content, 'html.parser')
+        from urllib.parse import urljoin
         
         # Inject JS for POST navigation and Dynamic Resource Loading
         script = soup.new_tag('script')
@@ -169,15 +170,15 @@ class ProxyService:
                     mutation.addedNodes.forEach((node) => {
                         if (node.nodeType === 1) { // Element
                             // Check img src
-                            if (node.tagName === 'IMG' && node.src && node.src.startsWith('http') && !node.src.includes(window.location.host)) {
+                            if (node.tagName === 'IMG' && node.src && !node.src.includes(window.location.host)) {
                                 rewriteResource(node, 'src');
                             }
                             // Check script src
-                            if (node.tagName === 'SCRIPT' && node.src && node.src.startsWith('http') && !node.src.includes(window.location.host)) {
+                            if (node.tagName === 'SCRIPT' && node.src && !node.src.includes(window.location.host)) {
                                 rewriteResource(node, 'src');
                             }
                             // Check link href
-                            if (node.tagName === 'LINK' && node.href && node.href.startsWith('http') && !node.href.includes(window.location.host)) {
+                            if (node.tagName === 'LINK' && node.href && !node.href.includes(window.location.host)) {
                                 rewriteResource(node, 'href');
                             }
                         }
@@ -209,33 +210,44 @@ class ProxyService:
             soup.append(script)
 
         # Rewrite links
-        for tag in soup.find_all(['a', 'link', 'script', 'img', 'iframe']):
+        for tag in soup.find_all(['a', 'link', 'script', 'img', 'iframe', 'form']):
             # Handle href (Navigation)
             if tag.name == 'a' and tag.has_attr('href'):
                 url = tag['href']
-                if url.startswith('http'):
+                # Resolve relative URLs
+                full_url = urljoin(base_url, url)
+                
+                # Check if it's a valid http/https link (not javascript:, mailto:, etc)
+                if full_url.startswith(('http://', 'https://')):
                     tag['href'] = '#'
-                    tag['onclick'] = f"proxyGo('{url}'); return false;"
+                    tag['onclick'] = f"proxyGo('{full_url}'); return false;"
             
             # Handle src (Resources)
-            # We rewrite src to a GET proxy endpoint for resources to fix broken images/scripts
             if tag.has_attr('src'):
                 src = tag['src']
-                if src.startswith('http'):
-                    # Encrypt the resource URL
-                    # Note: This is synchronous, but encrypt_payload is sync so it's fine.
-                    # We need to make sure the client can handle this.
-                    # Since we can't easily inject the payload into a GET param without exposing it,
-                    # we will use a new endpoint /api/proxy/resource?payload=...
-                    payload = self.encrypt_payload(src, exp_seconds=300)
+                full_src = urljoin(base_url, src)
+                if full_src.startswith(('http://', 'https://')):
+                    payload = self.encrypt_payload(full_src, exp_seconds=300)
                     tag['src'] = f"/api/proxy/resource?payload={payload}"
             
-            # Handle link href (CSS)
+            # Handle link href (CSS, Favicons)
             if tag.name == 'link' and tag.has_attr('href'):
                 href = tag['href']
-                if href.startswith('http'):
-                    payload = self.encrypt_payload(href, exp_seconds=300)
+                full_href = urljoin(base_url, href)
+                if full_href.startswith(('http://', 'https://')):
+                    payload = self.encrypt_payload(full_href, exp_seconds=300)
                     tag['href'] = f"/api/proxy/resource?payload={payload}"
+            
+            # Handle Form Actions
+            if tag.name == 'form' and tag.has_attr('action'):
+                action = tag['action']
+                full_action = urljoin(base_url, action)
+                if full_action.startswith(('http://', 'https://')):
+                    # Rewrite to use proxyGo (via onsubmit interception if possible, 
+                    # but simple forms are hard to proxy with just HTML rewriting.
+                    # Best effort: change action to # and use JS to submit via proxy)
+                    tag['action'] = '#'
+                    tag['onsubmit'] = f"event.preventDefault(); proxyGo('{full_action}' + '?' + new URLSearchParams(new FormData(this)).toString());"
 
         # Inject Back Button
         if soup.body:
