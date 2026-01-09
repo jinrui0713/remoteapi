@@ -797,25 +797,6 @@ async def search_logs(q: str, request: Request):
             except:
                 continue
     return results[:1000]
-            "disk_usage": {
-                "total": total,
-                "used": used,
-                "free": free
-            },
-            "system_info": {
-                "platform": sys.platform,
-                "python_version": sys.version,
-                "cpu_count": os.cpu_count() or 1
-            },
-            "logs": logs,
-            "bandwidth": bandwidth,
-            "blocked_ips": blocked_ips,
-            "clients": clients
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Admin stats error: {e}", exc_info=True)
 
 @app.post("/api/client/info")
 async def client_info(request: Request, info: Dict = Body(...)):
