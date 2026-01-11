@@ -763,7 +763,7 @@
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body p-0 bg-black rounded-bottom-4 overflow-hidden d-flex flex-column" style="min-height: 50vh;">
-                        <video ref="videoPlayer" :src="currentVideoUrl" controls class="w-100" style="max-height: 70vh; outline: none;">
+                        <video ref="videoPlayer" :src="currentVideoUrl" crossorigin="anonymous" controls class="w-100" style="max-height: 70vh; outline: none;">
                             <track v-for="sub in currentSubtitles" :kind="sub.kind" :src="sub.url" :label="sub.label" :srclang="sub.lang">
                         </video>
                         <div class="p-2 bg-dark text-white d-flex gap-2 justify-content-center align-items-center">
