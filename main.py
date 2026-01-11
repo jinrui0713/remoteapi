@@ -50,7 +50,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.0")
+app = FastAPI(title="yt-dlp API Server", version="8.2.2")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -117,8 +117,8 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(TRASH_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# Mount downloads directory for static access (playback)
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+if os.path.exists(DOWNLOAD_DIR):
+    app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 # --- Auth & Stats ---
 AUTH_COOKIE_NAME = "ytdlp_auth"
@@ -1416,7 +1416,6 @@ async def update_beta(version: str):
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 if __name__ == "__main__":
     import argparse

@@ -355,7 +355,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
-                    <small class="text-muted">v8.2.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v8.2.2 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -656,6 +656,21 @@
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- Offline Save Progress -->
+        <div class="fixed-bottom p-3" v-if="offlineProgress > 0" style="z-index: 2000;">
+             <div class="glass-panel" style="backdrop-filter: blur(10px); background: rgba(30,30,30,0.9);">
+                <div class="p-3">
+                    <div class="d-flex justify-content-between mb-2 text-white">
+                         <small><i class="bi bi-cloud-arrow-down me-2"></i>Downloading for Offline...</small>
+                         <small class="fw-bold">{{ offlineProgress }}%</small>
+                    </div>
+                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1);">
+                        <div class="progress-bar bg-success" :style="{width: offlineProgress + '%'}"></div>
+                    </div>
+                </div>
+             </div>
         </div>
         
         <!-- Server Modal -->
@@ -1230,10 +1245,11 @@
                     // Library Features
                     selectedFiles: [],
                     showAllJobs: false,
-                    isPWA: window.matchMedia('(display-mode: standalone)').matches,
+                    isPWA: window.matchMedia('(display-mode: standalone)').matches || ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')),
                     currentSubtitles: [],
                     playbackRate: 1.0,
                     isLooping: false,
+                    offlineProgress: 0,
                     
                     settings: {
                         theme: 'light',
@@ -1302,16 +1318,36 @@
                 async saveOffline(file) {
                     if (!confirm(`Save ${file.filename} for offline viewing? This may take time.`)) return;
                     file.saving = true;
+                    this.offlineProgress = 1;
                     try {
-                        const url = this.getFileUrl(file); // Use play URL for caching
+                        const url = this.getDownloadUrl(file);
+                        
+                        // Fetch with progress
+                        const response = await axios.get(url, {
+                            responseType: 'blob',
+                            onDownloadProgress: (progressEvent) => {
+                                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                                this.offlineProgress = percentCompleted;
+                            }
+                        });
+                        
+                        // Store in Cache
                         const cache = await caches.open('ytdlp-media-v1');
-                        await cache.add(url);
+                        // We need to construct a Response object to put in cache
+                        // Or just use cache.put with the request/response
+                        // Since we have the blob, we can create a response
+                        const cacheResp = new Response(response.data, {
+                            headers: { 'Content-Type': response.headers['content-type'] }
+                        });
+                        await cache.put(url, cacheResp);
+                        
                         file.isOffline = true;
-                        alert('Saved for offline!');
+                        // alert('Saved for offline!'); // Removing alert for smoother UX
                     } catch (e) {
-                        alert('Offline save failed: ' + e.message);
+                         alert('Offline save failed: ' + e.message);
                     } finally {
                         file.saving = false;
+                        this.offlineProgress = 0;
                     }
                 },
                 async clearOfflineCache() {
@@ -1759,6 +1795,15 @@
                 async proxyGo() {
                     if (!this.proxyUrl) return;
                     
+                    let target = this.proxyUrl.trim();
+                    if (!target.startsWith('http') && !target.includes('://')) {
+                         if (target.includes(' ') || !target.includes('.')) {
+                             target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
+                         } else {
+                             target = 'http://' + target;
+                         }
+                    }
+
                     // Open window immediately to bypass popup blocker
                     const targetName = 'proxy_' + Date.now();
                     const newWindow = window.open('about:blank', targetName);
@@ -1772,7 +1817,7 @@
                     newWindow.document.write('<html><head><title>Connecting...</title><style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;background:#222;color:#fff;}</style></head><body><h3>Connecting to Secure Proxy...</h3></body></html>');
 
                     try {
-                        const res = await axios.post('/api/proxy/encrypt', { url: this.proxyUrl });
+                        const res = await axios.post('/api/proxy/encrypt', { url: target });
                         const encryptedUrl = res.data.payload;
                         
                         const form = document.createElement('form');
@@ -2017,7 +2062,7 @@
                     return new Date(timestamp * 1000).toLocaleString();
                 },
                 playVideo(file) {
-                    this.currentVideoUrl = this.getFileUrl(file);
+                    this.currentVideoUrl = this.getDownloadUrl(file);
                     const modal = this.getModal('videoModal');
                     if (modal) {
                         modal.show();
@@ -2055,7 +2100,7 @@
                 }
 
                 // Check Auth & Send Client Info
-                axios.get('/system/info').then(() => {
+                axios.get('/system/info').then((res) => {
                     // Send Client Info
                     const info = {
                         user_agent: navigator.userAgent,
@@ -2068,6 +2113,8 @@
                         client_id: ('; '+document.cookie).split('; CLIENT_ID=').pop().split(';')[0]
                     };
                     axios.post('/api/client/handshake', info).catch(e => console.error("Client info error", e));
+                    
+                    if (res.data.role) this.userRole = res.data.role;
                 }).catch(e => {
                     if (e.response && e.response.status === 401) {
                         window.location.href = '/static/login.html';

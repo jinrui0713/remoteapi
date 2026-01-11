@@ -136,6 +136,11 @@ class ProxyService:
 
     def rewrite_html(self, html_content: bytes, base_url: str) -> str:
         soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Remove noscript tags to prevent "Enable JS" warnings
+        for ns in soup.find_all('noscript'):
+            ns.decompose()
+
         from urllib.parse import urljoin
         
         # --- 1. Title Spoofing ---
@@ -261,9 +266,18 @@ class ProxyService:
         
         function handleSearch(e) {{
             if (e.key === 'Enter') {{
-                const q = e.target.value;
-                const url = 'https://www.google.com/search?q=' + encodeURIComponent(q);
-                proxyGo(url);
+                let val = e.target.value.trim();
+                // Simple smart search logic
+                if (!val.startsWith('http') && !val.includes('://')) {{
+                    // If no space and has dot, treat as domain
+                    if (!val.includes(' ') && val.includes('.')) {{
+                        val = 'http://' + val;
+                    }} else {{
+                        // Otherwise search
+                        val = 'https://www.google.com/search?q=' + encodeURIComponent(val);
+                    }}
+                }}
+                proxyGo(val);
             }}
         }}
 
@@ -272,16 +286,95 @@ class ProxyService:
             // Construct Control Bar
             const bar = document.createElement('div');
             bar.id = 'proxy-control-bar';
-            bar.innerHTML = `
-                <div>
-                    <button onclick="goBack()">Back</button>
-                    <button onclick="history.length > 2 ? goBack() : alert('Not enough history')">Back x2</button>
-                    <button onclick="goHome()">Home</button>
-                    <button onclick="window.location.reload()">Refresh</button>
-                </div>
-                <input type="text" placeholder="Search Google or Type URL..." onkeydown="handleSearch(event)">
-                <div style="font-size: 10px; color: #888;">Secure Proxy Active</div>
+            
+            // Create elements using DOM API instead of innerHTML to attach events easier for history
+            bar.style.cssText = `
+                position: fixed; bottom: 0; left: 0; width: 100%; height: 50px;
+                background: #222; color: #fff; display: flex; align-items: center;
+                justify-content: space-between; padding: 0 10px; z-index: 2147483647;
+                font-family: sans-serif; box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
             `;
+
+            const grp = document.createElement('div');
+            grp.style.display = 'flex';
+            grp.style.gap = '5px';
+
+            const btnStyle = "background: #444; color: #fff; border: 1px solid #555; padding: 5px 10px; border-radius: 4px; cursor: pointer;";
+            
+            const backBtn = document.createElement('button');
+            backBtn.innerText = '←';
+            backBtn.style.cssText = btnStyle;
+            backBtn.onclick = goBack;
+
+            const homeBtn = document.createElement('button');
+            homeBtn.innerText = '🏠';
+            homeBtn.style.cssText = btnStyle;
+            homeBtn.onclick = goHome;
+            
+            const refreshBtn = document.createElement('button');
+            refreshBtn.innerText = '↻';
+            refreshBtn.style.cssText = btnStyle;
+            refreshBtn.onclick = () => window.location.reload();
+
+            // History Dropdown Button
+            const histBtn = document.createElement('button');
+            histBtn.innerText = '🕒';
+            histBtn.style.cssText = btnStyle;
+            histBtn.style.position = 'relative';
+            histBtn.onclick = (e) => {{
+                e.stopPropagation();
+                let drop = document.getElementById('proxy-hist-drop');
+                if (drop) {{ drop.remove(); return; }}
+                
+                drop = document.createElement('div');
+                drop.id = 'proxy-hist-drop';
+                drop.style.cssText = "position:absolute; bottom:40px; left:0; background:#333; border:1px solid #555; min-width:200px; max-height:300px; overflow-y:auto; border-radius:4px; box-shadow:0 -5px 15px rgba(0,0,0,0.5);";
+                
+                const history = JSON.parse(sessionStorage.getItem('proxy_history') || '[]');
+                if (history.length === 0) {{
+                    drop.innerHTML = '<div style="padding:10px;color:#aaa;font-size:12px;">No History</div>';
+                }} else {{
+                    // Show reversed unique
+                    [...new Set(history)].reverse().forEach(url => {{
+                        const row = document.createElement('div');
+                        row.innerText = url;
+                        row.style.cssText = "padding:8px; border-bottom:1px solid #444; font-size:12px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:300px;";
+                        row.onmouseover = () => row.style.background = '#555';
+                        row.onmouseout = () => row.style.background = 'transparent';
+                        row.onclick = () => {{ proxyGo(url); drop.remove(); }};
+                        drop.appendChild(row);
+                    }});
+                }}
+                // Append to button so it follows position? No, append to body or bar.
+                // Creating a relative wrapper might be better, but let's append to bar (absolute)
+                // Bar is fixed, so absolute inside it works relative to bar if bar has position (it does).
+                // Actually button has position relative, so lets append to button?
+                // No, button has overflow:hidden usually? No.
+                // Let's append to histBtn
+                console.log('Appended history');
+                histBtn.appendChild(drop);
+                
+                 document.addEventListener('click', function c(ev) {{
+                    if(!drop.contains(ev.target) && ev.target !== histBtn) {{
+                        drop.remove();
+                        document.removeEventListener('click', c);
+                    }}
+                }});
+            }};
+
+            grp.appendChild(backBtn);
+            grp.appendChild(homeBtn);
+            grp.appendChild(refreshBtn);
+            grp.appendChild(histBtn);
+
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'Search...';
+            searchInput.style.cssText = "flex-grow:1; margin:0 10px; padding:5px; border-radius:4px; border:none;";
+            searchInput.onkeydown = handleSearch;
+
+            bar.appendChild(grp);
+            bar.appendChild(searchInput);
             document.body.appendChild(bar);
             
             const spacer = document.createElement('div');
@@ -341,7 +434,13 @@ class ProxyService:
         const originalOpen = window.open;
         window.open = function(url, target, features) {{
              proxyGo(url);
-             return null;
+             // Return dummy object to prevent null reference errors
+             return {{
+                 focus: () => {{}},
+                 close: () => {{}},
+                 document: document,
+                 location: {{ href: url }}
+             }};
         }};
         
         // Simple location override (imperfect but catches some cases)
