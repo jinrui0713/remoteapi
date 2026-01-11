@@ -355,7 +355,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
-                    <small class="text-muted">v8.2.3 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v8.2.4 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -763,7 +763,7 @@
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body p-0 bg-black rounded-bottom-4 overflow-hidden d-flex flex-column" style="min-height: 50vh;">
-                        <video ref="videoPlayer" controls class="w-100" style="max-height: 70vh; outline: none;">
+                        <video ref="videoPlayer" :src="currentVideoUrl" controls class="w-100" style="max-height: 70vh; outline: none;">
                             <track v-for="sub in currentSubtitles" :kind="sub.kind" :src="sub.url" :label="sub.label" :srclang="sub.lang">
                         </video>
                         <div class="p-2 bg-dark text-white d-flex gap-2 justify-content-center align-items-center">
@@ -2090,7 +2090,14 @@
                     navigator.serviceWorker.register('/static/sw.js')
                         .then(reg => {
                             console.log('SW registered!', reg);
-                            this.isPWA = true;
+                            // Only enable PWA features if installed (Standalone)
+                            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+                            this.isPWA = isStandalone;
+                            
+                            // Listen for display mode changes (e.g. user installs app while open)
+                            window.matchMedia('(display-mode: standalone)').addEventListener('change', (evt) => {
+                                this.isPWA = evt.matches;
+                            });
                         })
                         .catch(err => console.log('SW registration failed', err));
                 }
