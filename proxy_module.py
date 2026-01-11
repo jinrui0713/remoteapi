@@ -141,6 +141,11 @@ class ProxyService:
         for ns in soup.find_all('noscript'):
             ns.decompose()
 
+        # Remove likely blocking headers in meta tags
+        for meta in soup.find_all('meta'):
+            if meta.get('http-equiv', '').lower() in ['content-security-policy', 'x-frame-options', 'permissions-policy']:
+                meta.decompose()
+
         from urllib.parse import urljoin
         
         # --- 1. Title Spoofing ---
@@ -455,6 +460,10 @@ class ProxyService:
 
         # Rewrite links and resources
         for tag in soup.find_all(['a', 'link', 'script', 'img', 'iframe', 'form']):
+            # Remove integrity checks as we are proxying content
+            if tag.has_attr('integrity'):
+                del tag['integrity']
+
             # Handle href (Navigation)
             if tag.name == 'a' and tag.has_attr('href'):
                 url = tag['href']
