@@ -717,7 +717,6 @@ async def login(req: LoginRequest, response: Response, request: Request):
             httponly=True,
             secure=False, 
             max_age=max_age
-            max_age=12 * 3600
         )
         return {"message": "Logged in", "role": role}
     else:
