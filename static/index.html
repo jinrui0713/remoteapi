@@ -355,7 +355,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
-                    <small class="text-muted">v8.2.2 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v8.2.3 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -369,6 +369,9 @@
                 </button>
                 <button class="btn btn-glass" @click="showProxyModal" title="Secure Proxy">
                     <i class="bi bi-shield-lock"></i> <span class="d-none d-sm-inline">Proxy</span>
+                </button>
+                <button class="btn btn-glass" v-if="userRole === 'admin'" @click="openAdminStats" title="Admin Dashboard">
+                    <i class="bi bi-speedometer2"></i> <span class="d-none d-sm-inline">Admin</span>
                 </button>
                 <div class="dropdown">
                     <button class="btn btn-glass dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -659,15 +662,18 @@
         </div>
         
         <!-- Offline Save Progress -->
-        <div class="fixed-bottom p-3" v-if="offlineProgress > 0" style="z-index: 2000;">
-             <div class="glass-panel" style="backdrop-filter: blur(10px); background: rgba(30,30,30,0.9);">
+        <div class="fixed-bottom p-3" v-if="offlineProgress > 0" style="z-index: 9999;">
+             <div class="glass-panel" style="backdrop-filter: blur(10px); background: rgba(30,30,30,0.95); box-shadow: 0 -5px 20px rgba(0,0,0,0.5);">
                 <div class="p-3">
                     <div class="d-flex justify-content-between mb-2 text-white">
-                         <small><i class="bi bi-cloud-arrow-down me-2"></i>Downloading for Offline...</small>
-                         <small class="fw-bold">{{ offlineProgress }}%</small>
+                         <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                            <small class="fw-bold">Saving Offline...</small>
+                         </div>
+                         <small class="fw-bold font-monospace">{{ offlineProgress }}%</small>
                     </div>
-                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1);">
-                        <div class="progress-bar bg-success" :style="{width: offlineProgress + '%'}"></div>
+                    <div class="progress" style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" :style="{width: offlineProgress + '%'}"></div>
                     </div>
                 </div>
              </div>

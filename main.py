@@ -36,6 +36,7 @@ try:
     import io 
     from concurrent.futures import ThreadPoolExecutor
     from typing import Dict, List, Optional
+    from yt_dlp.utils import sanitize_filename
     import db_utils
     
     # Initialize DB
@@ -50,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.2")
+app = FastAPI(title="yt-dlp API Server", version="8.2.3")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -1214,6 +1215,11 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         logging.error(f"Proxy failed: {e}", exc_info=True)
         return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500)
 
+@app.get("/proxy")
+async def proxy_get_handler():
+    """Handle GET requests to /proxy gracefully by redirecting or showing message"""
+    return RedirectResponse(url="/")
+
 # --- System Endpoints ---
 
 @app.get("/debug/info")
@@ -1236,7 +1242,7 @@ async def debug_info():
 
 @app.get("/api/download/{filename}")
 async def download_file(filename: str, request: Request):
-    """Direct download endpoint"""
+    """Direct download endpoint with Range support"""
     # Security check
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -1247,35 +1253,13 @@ async def download_file(filename: str, request: Request):
     
     # Log Download Event
     client_ip = request.client.host
-    db_utils.log_event(client_ip, "DOWNLOAD", f"File: {filename}")
-    
-    # Use Proxy Service's streaming with throttling for downloads too
-    # We need to wrap the file reading in an async generator compatible with stream_response logic
-    # Or just reuse the logic. Let's create a helper in proxy_module or just implement here.
-    # Since proxy_module has the state, let's use it.
-    
-    # We need to open the file and yield chunks
-    async def file_iterator(path):
-        async with aiofiles.open(path, 'rb') as f:
-            while True:
-                chunk = await f.read(64 * 1024) # 64KB
-                if not chunk:
-                    break
-                
-                # Apply Throttling Logic from Proxy Service
-                should_throttle = proxy_service._update_stats(client_ip, len(chunk))
-                if should_throttle:
-                    # 1MB/s limit
-                    await asyncio.sleep(len(chunk) / (1024 * 1024))
-                
-                yield chunk
-                
-    # Log Bandwidth (Approximate)
     file_size = os.path.getsize(file_path)
+    db_utils.log_event(client_ip, "DOWNLOAD", f"File: {filename}")
     db_utils.log_bandwidth(client_ip, 0, file_size, "download")
 
-    return StreamingResponse(
-        file_iterator(file_path), 
+    # Use FileResponse for proper Range support (seeking)
+    return FileResponse(
+        file_path, 
         media_type="application/octet-stream", 
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )

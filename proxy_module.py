@@ -266,6 +266,7 @@ class ProxyService:
         
         function handleSearch(e) {{
             if (e.key === 'Enter') {{
+                e.preventDefault(); // Prevent duplicated submissions
                 let val = e.target.value.trim();
                 // Simple smart search logic
                 if (!val.startsWith('http') && !val.includes('://')) {{
