@@ -32,6 +32,8 @@ try:
     import hashlib
     import shutil
     import aiofiles # Added for async file reading
+    import zipfile # Added for bulk download
+    import io 
     from concurrent.futures import ThreadPoolExecutor
     from typing import Dict, List, Optional
     import db_utils
@@ -48,7 +50,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.1.0")
+app = FastAPI(title="yt-dlp API Server", version="8.2.0")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -159,7 +161,7 @@ def check_auth(request: Request):
 # Middleware for Auth & Load Limit
 @app.middleware("http")
 async def auth_and_limit_middleware(request: Request, call_next):
-    # Allow static resources and login endpoints
+    # Allow static resources and login endpointsapi/auth/register", "/api/client/handshake", "/
     if request.url.path.startswith("/static") or \
        request.url.path in ["/login", "/api/login", "/system/info"]:
         return await call_next(request)
@@ -455,6 +457,33 @@ async def download_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type='application/octet-stream', filename=filename)
 
+@app.get("/api/stream")
+async def stream_video(url: str, request: Request):
+    """
+    Get direct stream URL from yt-dlp and proxy it.
+    """
+    try:
+        ydl_opts = {'format': 'best', 'quiet': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            stream_url = info.get('url')
+            if not stream_url:
+                raise Exception("No stream URL found")
+            
+            # Proxy the stream
+            client = httpx.AsyncClient(verify=False, follow_redirects=True)
+            req_stream = client.build_request("GET", stream_url)
+            r = await client.send(req_stream, stream=True)
+            
+            return StreamingResponse(
+                r.aiter_bytes(),
+                status_code=r.status_code,
+                media_type=r.headers.get("content-type"),
+            )
+    except Exception as e:
+        logging.error(f"Stream error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/download")
 async def start_download(request: DownloadRequest, req: Request):
     job_id = str(uuid.uuid4())
@@ -522,6 +551,63 @@ async def list_files():
     files.sort(key=lambda x: x["created_at"], reverse=True)
     return files
 
+class BulkFileRequest(BaseModel):
+    filenames: List[str]
+
+@app.post("/api/files/bulk_delete")
+async def bulk_delete_files(req: BulkFileRequest):
+    deleted = []
+    errors = []
+    if not os.path.exists(TRASH_DIR):
+        os.makedirs(TRASH_DIR)
+        
+    for filename in req.filenames:
+        safe_name = sanitize_filename(filename)
+        file_path = os.path.join(DOWNLOAD_DIR, safe_name)
+        if os.path.exists(file_path):
+            try:
+                # Move to trash
+                trash_path = os.path.join(TRASH_DIR, safe_name)
+                if os.path.exists(trash_path):
+                     base, ext = os.path.splitext(safe_name)
+                     trash_path = os.path.join(TRASH_DIR, f"{base}_{int(time.time())}{ext}")
+                shutil.move(file_path, trash_path)
+                deleted.append(filename)
+            except Exception as e:
+                errors.append(f"{filename}: {e}")
+        else:
+            errors.append(f"{filename}: Not found")
+    
+    return {"deleted": deleted, "errors": errors}
+
+@app.post("/api/files/bulk_download")
+async def bulk_download_files(req: BulkFileRequest):
+    temp_zip = os.path.join(TEMP_DIR, f"bulk_{uuid.uuid4()}.zip")
+    try:
+        with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for filename in req.filenames:
+                safe_name = sanitize_filename(filename)
+                file_path = os.path.join(DOWNLOAD_DIR, safe_name)
+                if os.path.exists(file_path):
+                    zf.write(file_path, arcname=filename)
+        
+        def iterfile():
+            with open(temp_zip, mode="rb") as file_like:
+                yield from file_like
+            try:
+                os.remove(temp_zip)
+            except:
+                pass
+
+        return StreamingResponse(iterfile(), media_type="application/zip", headers={"Content-Disposition": "attachment; filename=downloads.zip"})
+    except Exception as e:
+        if os.path.exists(temp_zip):
+            try:
+                os.remove(temp_zip)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/files/{filename}")
 async def delete_file(filename: str):
     fp = os.path.join(DOWNLOAD_DIR, filename)
@@ -538,6 +624,7 @@ async def delete_file(filename: str):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    is_pwa: bool = False
 
 class RegisterRequest(BaseModel):
     nickname: str
@@ -621,12 +708,15 @@ async def login(req: LoginRequest, response: Response, request: Request):
         }
         
         db_utils.log_event(request.client.host, "LOGIN", f"User: {req.username}")
+        # PWA Session Duration (30 days) vs Normal (12 hours)
+        max_age = 30 * 24 * 3600 if req.is_pwa else 12 * 3600
         
         response.set_cookie(
             key=AUTH_COOKIE_NAME,
             value=session_token,
             httponly=True,
             secure=False, 
+            max_age=max_age
             max_age=12 * 3600
         )
         return {"message": "Logged in", "role": role}

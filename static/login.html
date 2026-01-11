@@ -57,11 +57,13 @@
             e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            const is_pwa = window.matchMedia('(display-mode: standalone)').matches;
+            
             try {
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password})
+                    body: JSON.stringify({username, password, is_pwa})
                 });
                 if (res.ok) {
                     window.location.href = '/';

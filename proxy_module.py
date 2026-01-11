@@ -138,16 +138,82 @@ class ProxyService:
         soup = BeautifulSoup(html_content, 'html.parser')
         from urllib.parse import urljoin
         
-        # Inject JS for POST navigation and Dynamic Resource Loading
+        # --- 1. Title Spoofing ---
+        if soup.title:
+            soup.title.string = "東進学力POS"
+        else:
+            new_title = soup.new_tag('title')
+            new_title.string = "東進学力POS"
+            if soup.head:
+                soup.head.append(new_title)
+            else:
+                if not soup.html: soup.append(soup.new_tag('html'))
+                if not soup.html.head: soup.html.insert(0, soup.new_tag('head'))
+                soup.html.head.append(new_title)
+
+        # --- 2. Inject Control Bar & Universal Proxy Script ---
+        
+        control_bar_styles = """
+        #proxy-control-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            background: #222;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            z-index: 2147483647;
+            font-family: sans-serif;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+        }
+        #proxy-control-bar button {
+            background: #444;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        #proxy-control-bar button:hover { background: #555; }
+        #proxy-control-bar input {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            width: 300px;
+        }
+        #proxy-content-spacer { height: 50px; }
+        """
+        
+        style_tag = soup.new_tag('style')
+        style_tag.string = control_bar_styles
+        if soup.head: soup.head.append(style_tag)
+
+        # Main Proxy Script
         script = soup.new_tag('script')
-        script.string = """
-        async function proxyGo(url) {
-            try {
-                const res = await fetch('/api/proxy/encrypt', {
+        script.string = f"""
+        // Title Watcher (Force "東進学力POS")
+        setInterval(() => {{
+            if (document.title !== "東進学力POS") document.title = "東進学力POS";
+        }}, 500);
+
+        // Core Proxy Navigation Function
+        async function proxyGo(url) {{
+            try {{
+                // Save to history before navigating
+                saveToHistory(url);
+                
+                const res = await fetch('/api/proxy/encrypt', {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url: url})
-                });
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{url: url}})
+                }});
                 const data = await res.json();
                 
                 const form = document.createElement('form');
@@ -156,58 +222,132 @@ class ProxyService:
                 
                 const input = document.createElement('input');
                 input.type = 'hidden';
-                input.name = 'payload'; // Form data key
+                input.name = 'payload';
                 input.value = data.payload;
                 
                 form.appendChild(input);
                 document.body.appendChild(form);
                 form.submit();
-            } catch (e) {
-                alert('Navigation failed');
-            }
-        }
+            }} catch (e) {{
+                alert('Navigation failed: ' + e);
+            }}
+        }}
 
-        // Dynamic Resource Rewriter
-        document.addEventListener("DOMContentLoaded", function() {
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === 1) { // Element
-                            // Check img src
-                            if (node.tagName === 'IMG' && node.src && !node.src.includes(window.location.host)) {
-                                rewriteResource(node, 'src');
-                            }
-                            // Check script src
-                            if (node.tagName === 'SCRIPT' && node.src && !node.src.includes(window.location.host)) {
-                                rewriteResource(node, 'src');
-                            }
-                            // Check link href
-                            if (node.tagName === 'LINK' && node.href && !node.href.includes(window.location.host)) {
-                                rewriteResource(node, 'href');
-                            }
-                        }
-                    });
-                });
-            });
+        // History Management
+        function saveToHistory(url) {{
+            let history = JSON.parse(sessionStorage.getItem('proxy_history') || '[]');
+            // Don't duplicate top
+            if (history.length === 0 || history[history.length-1] !== url) {{
+                history.push(url);
+                sessionStorage.setItem('proxy_history', JSON.stringify(history));
+            }}
+        }}
+
+        function goBack() {{
+            let history = JSON.parse(sessionStorage.getItem('proxy_history') || '[]');
+            if (history.length > 1) {{
+                history.pop(); // Remove current
+                const prev = history.pop(); // Get previous
+                sessionStorage.setItem('proxy_history', JSON.stringify(history)); // Save state
+                proxyGo(prev);
+            }} else {{
+                alert('No history');
+            }}
+        }}
+
+        function goHome() {{
+             window.location.href = '/';
+        }}
+        
+        function handleSearch(e) {{
+            if (e.key === 'Enter') {{
+                const q = e.target.value;
+                const url = 'https://www.google.com/search?q=' + encodeURIComponent(q);
+                proxyGo(url);
+            }}
+        }}
+
+        // Dynamic Resource Rewriter & Auto-Refresh Interceptor
+        document.addEventListener("DOMContentLoaded", function() {{
+            // Construct Control Bar
+            const bar = document.createElement('div');
+            bar.id = 'proxy-control-bar';
+            bar.innerHTML = `
+                <div>
+                    <button onclick="goBack()">Back</button>
+                    <button onclick="history.length > 2 ? goBack() : alert('Not enough history')">Back x2</button>
+                    <button onclick="goHome()">Home</button>
+                    <button onclick="window.location.reload()">Refresh</button>
+                </div>
+                <input type="text" placeholder="Search Google or Type URL..." onkeydown="handleSearch(event)">
+                <div style="font-size: 10px; color: #888;">Secure Proxy Active</div>
+            `;
+            document.body.appendChild(bar);
             
-            observer.observe(document.body, { childList: true, subtree: true });
-        });
+            const spacer = document.createElement('div');
+            spacer.id = 'proxy-content-spacer';
+            document.body.appendChild(spacer);
 
-        async function rewriteResource(node, attr) {
+            // Mutation Observer for dynamic content
+            const observer = new MutationObserver((mutations) => {{
+                mutations.forEach((mutation) => {{
+                    mutation.addedNodes.forEach((node) => {{
+                        if (node.nodeType === 1) {{ // Tiago
+                            rewriteAttributes(node);
+                        }}
+                    }});
+                }});
+            }});
+            observer.observe(document.body, {{ childList: true, subtree: true }});
+        }});
+        
+        // Helper to rewrite generic attributes async
+        async function rewriteAttributes(node) {{
+            if (node.tagName === 'IMG' && node.src && !node.src.includes(window.location.host)) {{
+                rewriteResource(node, 'src');
+            }}
+            if (node.tagName === 'SCRIPT' && node.src && !node.src.includes(window.location.host)) {{
+                rewriteResource(node, 'src');
+            }}
+            if (node.tagName === 'LINK' && node.href && !node.href.includes(window.location.host)) {{
+                rewriteResource(node, 'href');
+            }}
+            if (node.tagName === 'IFRAME' && node.src && !node.src.includes(window.location.host)) {{
+                // Iframes need full proxy treatment ideally, or resource proxy if simple
+                // Let's try resource first, but navigation inside iframe will break out
+                rewriteResource(node, 'src');
+            }}
+        }}
+
+        async function rewriteResource(node, attr) {{
             const originalUrl = node[attr];
-            try {
-                const res = await fetch('/api/proxy/encrypt', {
+            // Prevent double-rewrite
+            if (originalUrl.includes('/api/proxy/resource')) return;
+            
+            try {{
+                const res = await fetch('/api/proxy/encrypt', {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url: originalUrl})
-                });
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{url: originalUrl}})
+                }});
                 const data = await res.json();
-                node[attr] = `/api/proxy/resource?payload=${data.payload}`;
-            } catch (e) {
-                console.error('Failed to rewrite resource:', originalUrl);
-            }
-        }
-        """
+                node[attr] = `/api/proxy/resource?payload=${{data.payload}}`;
+            }} catch (e) {{
+                // Silent fail
+            }}
+        }}
+        
+        // Override standard window functions
+        const originalOpen = window.open;
+        window.open = function(url, target, features) {{
+             proxyGo(url);
+             return null;
+        }};
+        
+        // Simple location override (imperfect but catches some cases)
+        // Note: Direct assignment to window.location.href is hard to trap 100% without proxy objects
+        
+        """;
         if soup.head:
             soup.head.append(script)
         else:
@@ -238,12 +378,62 @@ class ProxyService:
                     payload = self.encrypt_payload(full_src, exp_seconds=300)
                     tag['src'] = f"/api/proxy/resource?payload={payload}"
             
+            # Handle srcset (Responsive Images)
+            if tag.has_attr('srcset'):
+                try:
+                    srcset_val = tag['srcset']
+                    new_parts = []
+                    for part in srcset_val.split(','):
+                        part = part.strip()
+                        if not part: continue
+                        # Format: "url 1x" or just "url"
+                        subparts = part.split(' ')
+                        p_url = subparts[0]
+                        full_p_url = urljoin(base_url, p_url)
+                        if full_p_url.startswith(('http://', 'https://')):
+                            payload = self.encrypt_payload(full_p_url, exp_seconds=300)
+                            new_url = f"/api/proxy/resource?payload={payload}"
+                            # Reconstruct
+                            subparts[0] = new_url
+                            new_parts.append(' '.join(subparts))
+                        else:
+                            new_parts.append(part)
+                    tag['srcset'] = ', '.join(new_parts)
+                except:
+                    pass
+            
+            # Handle Inline Styles (background-image etc)
+            if tag.has_attr('style'):
+                style = tag['style']
+                # regex to find url(...)
+                import re
+                def start_repl(match):
+                    url_val = match.group(1).strip("'\"")
+                    if url_val.startswith('data:'): return match.group(0)
+                    full_val = urljoin(base_url, url_val)
+                    if full_val.startswith(('http://', 'https://')):
+                         payload = self.encrypt_payload(full_val, exp_seconds=300)
+                         return f"url('/api/proxy/resource?payload={payload}')"
+                    return match.group(0)
+
+                new_style = re.sub(r'url\((.*?)\)', start_repl, style)
+                tag['style'] = new_style
+
             # Handle link href (CSS, Favicons) - EXCLUDE if it was already handled as 'a' (unlikely for link tag)
             if tag.name == 'link' and tag.has_attr('href'):
                 href = tag['href']
                 full_href = urljoin(base_url, href)
                 # Stylesheets and icons should be proxied as resources
                 if full_href.startswith(('http://', 'https://')):
+                    # Check if it is CSS
+                    rel = tag.get('rel', [])
+                    if 'stylesheet' in rel or href.endswith('.css'):
+                         # CSS needs special handling ideally (rewrite inside), but for now resource proxy is step 1
+                         # If we just proxy the css file, the relative links INSIDE the css will break unless the proxy rewrite endpoint handles CSS content type.
+                         # Current implementation of /api/proxy/resource is a simple streamer. 
+                         # TODO: CSS internally referenced URLs will break. 
+                         pass
+                    
                     payload = self.encrypt_payload(full_href, exp_seconds=300)
                     tag['href'] = f"/api/proxy/resource?payload={payload}"
             
@@ -251,8 +441,10 @@ class ProxyService:
             if tag.name == 'form' and tag.has_attr('action'):
                 action = tag['action']
                 full_action = urljoin(base_url, action)
-                # Form handling is tricky. We rewrite action to # and intercept onsubmit
+               
                 tag['action'] = '#'
+                # We override submission to use proxyGo for GET, and intercept POST
+                # Note: This is a robust "Bypass" request.
                 tag['onsubmit'] = f"""
                     event.preventDefault(); 
                     const formData = new FormData(this);
@@ -262,9 +454,14 @@ class ProxyService:
                         url += '?' + params.toString();
                         proxyGo(url);
                     }} else {{
-                        // POST not fully supported in this simple rewrite without JS-based fetch proxy
-                        // Fallback to GET for now or alert
-                        alert('Complex form submission not fully supported in this mode');
+                         // For POST, we realistically need a server-side handler that accepts params
+                         // Since we don't have a generic "Proxy POST" endpoint that takes arbitrary body,
+                         // We downgrade to GET for compatibility or alert.
+                         // But user asked to bypass EVERYTHING.
+                         // Let's try to append params to URL even for POST (some sites accept mixed)
+                         // OR, we can implement a more complex POST proxy later.
+                         url += '?' + params.toString();
+                         proxyGo(url);
                     }}
                 """
         
@@ -280,9 +477,6 @@ class ProxyService:
                     if url_part.lower().startswith('url='):
                         target_url = url_part[4:]
                         full_target = urljoin(base_url, target_url)
-                        # Rewrite content to point to proxy
-                        # We can't easily rewrite the content string to hit POST /proxy.
-                        # Instead, we replace meta refresh with JS redirect
                         meta.decompose()
                         
                         refresh_script = soup.new_tag('script')
@@ -298,127 +492,53 @@ class ProxyService:
             
             # Check content type for HTML
             content_type = response.headers.get("content-type", "")
+            base_url = str(response.url)
+            
             if "text/html" in content_type:
                 # Buffer HTML for rewriting
                 content = await response.read()
                 total_bytes = len(content)
                 
-                # Check for encoding
+                # Use the centralized rewriter
+                rewritten = self.rewrite_html(content, base_url)
+                
+                # Encode back to bytes
+                # We assume UTF-8 for rewritten content usually
+                try:
+                    yield rewritten.encode('utf-8')
+                except:
+                    yield rewritten.encode('utf-8', errors='replace')
+
+            elif "text/css" in content_type:
+                # Buffer CSS for rewriting
+                content = await response.read()
+                total_bytes = len(content)
+                
                 encoding = response.encoding or 'utf-8'
                 try:
-                    text = content.decode(encoding, errors='replace')
+                    css_text = content.decode(encoding)
                 except:
-                    text = content.decode('utf-8', errors='replace')
-                    
-                # Rewrite HTML
-                base_url = str(response.url)
-                soup = BeautifulSoup(text, 'html.parser')
+                    css_text = content.decode('utf-8', errors='replace')
                 
-                # Title Change
-                if soup.title:
-                    soup.title.string = "東進学力POS"
-                else:
-                    new_title = soup.new_tag("title")
-                    new_title.string = "東進学力POS"
-                    if soup.head:
-                        soup.head.append(new_title)
+                # Rewrite CSS URLs
+                import re
+                from urllib.parse import urljoin
                 
-                # Inject Scripts & Styles
-                script = soup.new_tag('script')
-                script.string = """
-                // --- Proxy Helper ---
-                function proxyGo(url) {
-                    try {
-                        // Check if relative or absolute
-                        fetch('/api/proxy/encrypt', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({url: url})
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                            const form = document.createElement('form');
-                            form.method = 'POST';
-                            form.action = '/proxy';
-                            
-                            const input = document.createElement('input');
-                            input.type = 'hidden';
-                            input.name = 'payload';
-                            input.value = data.payload;
-                            
-                            form.appendChild(input);
-                            document.body.appendChild(form);
-                            form.submit();
-                        })
-                        .catch(e => alert('Navigation failed: ' + e));
-                    } catch(e) {
-                        alert(e);
-                    }
-                }
-                
-                // Auto Refresh / Redirect Interception
-                // Overwrite window.location
-                // This is hard to do perfectly, but we can try to intercept assignments
-                /* 
-                // Too aggressive/broken to intercept location assignment directly
-                */
-                
-                // Control Bar
-                document.addEventListener('DOMContentLoaded', () => {
-                    const bar = document.createElement('div');
-                    bar.style.cssText = "position:fixed;bottom:0;left:0;width:100%;background:#333;color:white;padding:10px;display:flex;gap:10px;align-items:center;z-index:2147483647;font-family:sans-serif;box-shadow:0 -2px 10px rgba(0,0,0,0.5);";
+                def css_url_repl(match):
+                    url_val = match.group(1).strip("'\"")
+                    if url_val.startswith('data:'): return match.group(0)
                     
-                    const btnStyle = "background:#555;border:1px solid #777;color:white;padding:5px 10px;cursor:pointer;border-radius:4px;";
-                    
-                    const backBtn = document.createElement('button');
-                    backBtn.innerText = '←';
-                    backBtn.style.cssText = btnStyle;
-                    backBtn.onclick = () => window.history.back();
-                    
-                    const fwdBtn = document.createElement('button');
-                    fwdBtn.innerText = '→';
-                    fwdBtn.style.cssText = btnStyle;
-                    fwdBtn.onclick = () => window.history.forward();
+                    full_val = urljoin(base_url, url_val)
+                    if full_val.startswith(('http://', 'https://')):
+                         payload = self.encrypt_payload(full_val, exp_seconds=300)
+                         return f"url('/api/proxy/resource?payload={payload}')"
+                    return match.group(0)
 
-                    const homeBtn = document.createElement('button');
-                    homeBtn.innerText = '🏠';
-                    homeBtn.style.cssText = btnStyle;
-                    homeBtn.onclick = () => window.location.href = '/';
-                    
-                    const searchInput = document.createElement('input');
-                    searchInput.type = 'text';
-                    searchInput.placeholder = 'URL or Search...';
-                    searchInput.style.cssText = "flex-grow:1;padding:5px;border-radius:4px;border:none;";
-                    searchInput.onkeydown = (e) => {
-                        if (e.key === 'Enter') {
-                            let val = searchInput.value.trim();
-                            if (!val.startsWith('http') && !val.includes('.')) {
-                                val = 'https://www.google.com/search?q=' + encodeURIComponent(val);
-                            } else if (!val.startsWith('http')) {
-                                val = 'http://' + val;
-                            }
-                            proxyGo(val);
-                        }
-                    };
-
-                    bar.appendChild(backBtn);
-                    bar.appendChild(fwdBtn);
-                    bar.appendChild(homeBtn);
-                    bar.appendChild(searchInput);
-                    document.body.appendChild(bar);
-                    
-                    // Adjust body margin
-                    document.body.style.marginBottom = "60px";
-                });
-                """
-                if soup.body:
-                    soup.body.append(script)
-                
-                # Send rewritten HTML
-                yield str(soup).encode(encoding, errors='replace')
-                
+                rewritten_css = re.sub(r'url\((.*?)\)', css_url_repl, css_text)
+                yield rewritten_css.encode('utf-8')
+            
             else:
-                # Streaming for non-HTML
+                # Streaming for non-HTML/CSS
                 async for chunk in response.aiter_bytes(CHUNK_SIZE):
                     size = len(chunk)
                     total_bytes += size
@@ -428,7 +548,7 @@ class ProxyService:
                         expected_time = size / MAX_SPEED_BPS
                         await asyncio.sleep(expected_time)
             
-            # Log bandwidth after stream finishes
+            # Log bandwidth
             db_utils.log_bandwidth(client_ip, total_bytes, 0, "proxy")
         except Exception as e:
             logging.error(f"Stream error: {e}")

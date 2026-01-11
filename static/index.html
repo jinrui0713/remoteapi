@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yt-Dlp Manager</title>
+    <link rel="manifest" href="/static/manifest.json">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
@@ -354,7 +355,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
-                    <small class="text-muted">v8.1.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v8.2.0 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -369,17 +370,15 @@
                 <button class="btn btn-glass" @click="showProxyModal" title="Secure Proxy">
                     <i class="bi bi-shield-lock"></i> <span class="d-none d-sm-inline">Proxy</span>
                 </button>
-                <button class="btn btn-glass text-danger" v-if="userRole === 'admin'" @click="openAdminStats" title="Admin Dashboard">
-                    <i class="bi bi-speedometer2"></i> <span class="d-none d-sm-inline">Admin</span>
-                </button>
                 <div class="dropdown">
                     <button class="btn btn-glass dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         <i class="bi bi-gear"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-4 p-2">
+                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="openSettings">Settings</a></li>
                         <li><a class="dropdown-item rounded-3" href="#" @click.prevent="$refs.cookieInput.click()">Upload Cookies</a></li>
                         <li><a class="dropdown-item rounded-3" href="#" @click.prevent="updateSystem">Check Updates</a></li>
-                        <li><hr class="dropdown-divider"></li>
+                        <hr class="dropdown-divider">
                         <li><a class="dropdown-item rounded-3 text-danger" href="#" @click.prevent="logout">Logout</a></li>
                     </ul>
                 </div>
@@ -398,6 +397,9 @@
                         <div class="input-group input-group-lg">
                             <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-link-45deg"></i></span>
                             <input type="text" class="form-control border-start-0 ps-0" v-model="form.url" required placeholder="Paste video URL or Type search query...">
+                            <button type="button" class="btn btn-outline-secondary" @click="pasteUrl" title="Paste from Clipboard">
+                                <i class="bi bi-clipboard-plus"></i>
+                            </button>
                         </div>
                     </div>
                     
@@ -482,7 +484,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="job in jobs" :key="job.id + job.serverUrl">
+                                <tr v-for="job in visibleJobs" :key="job.id + job.serverUrl">
                                     <td class="ps-4">
                                         <div class="fw-bold text-truncate" style="max-width: 250px;">{{ job.title || job.url }}</div>
                                         <div class="small text-muted"><i class="bi bi-hdd-network me-1"></i>{{ getServerName(job.serverUrl) }}</div>
@@ -511,6 +513,13 @@
                                         </button>
                                     </td>
                                 </tr>
+                                <tr v-if="jobs.length > visibleJobs.length">
+                                    <td colspan="5" class="text-center">
+                                        <button class="btn btn-sm btn-link text-decoration-none" @click="showAllJobs = true">
+                                            Show {{ jobs.length - visibleJobs.length }} older jobs...
+                                        </button>
+                                    </td>
+                                </tr>
                                 <tr v-if="jobs.length === 0">
                                     <td colspan="5" class="text-center py-5 text-muted">
                                         <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
@@ -527,28 +536,48 @@
             <div class="col-lg-12">
                 <div class="glass-panel h-100">
                     <div class="glass-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><i class="bi bi-collection-play me-2"></i>Library</h5>
+                        <div class="d-flex align-items-center gap-3">
+                            <h5 class="mb-0"><i class="bi bi-collection-play me-2"></i>Library</h5>
+                            <span v-if="selectedFiles.length > 0" class="badge bg-primary rounded-pill">{{ selectedFiles.length }} selected</span>
+                            <div v-if="selectedFiles.length > 0" class="btn-group btn-group-sm">
+                                <button class="btn btn-primary-glass btn-sm" @click="downloadSelectedFiles">
+                                    <i class="bi bi-download me-1"></i> Download
+                                </button>
+                                <button class="btn btn-glass btn-sm text-danger" @click="deleteSelectedFiles">
+                                    <i class="bi bi-trash me-1"></i> Delete
+                                </button>
+                            </div>
+                        </div>
                         <button class="btn btn-sm btn-glass" @click="fetchAllData"><i class="bi bi-arrow-clockwise"></i></button>
                     </div>
                     <div class="p-0 table-responsive">
                         <table class="table table-glass align-middle mb-0">
                             <thead class="text-muted small text-uppercase">
                                 <tr>
-                                    <th class="ps-4">Filename</th>
+                                    <th class="ps-4" style="width: 40px">
+                                        <input type="checkbox" class="form-check-input" :checked="allSelected" @click="toggleSelectAll">
+                                    </th>
+                                    <th>Filename</th>
                                     <th>Size</th>
                                     <th>Date</th>
                                     <th class="text-end pe-4">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="file in files" :key="file.serverUrl + file.filename">
+                                <tr v-for="file in filteredFiles" :key="file.serverUrl + file.filename">
                                     <td class="ps-4">
+                                        <input type="checkbox" class="form-check-input" :value="file.filename" v-model="selectedFiles">
+                                    </td>
+                                    <td>
                                         <div class="d-flex align-items-center">
                                             <div class="bg-theme-icon p-2 rounded me-3 shadow-sm">
                                                 <i class="bi bi-file-earmark-play-fill fs-5"></i>
                                             </div>
                                             <div>
-                                                <div class="fw-bold text-break">{{ file.filename }}</div>
+                                                <div class="fw-bold text-break">
+                                                    {{ file.filename }}
+                                                    <i v-if="file.isOffline" class="bi bi-cloud-check-fill text-success ms-1" title="Available Offline"></i>
+                                                </div>
                                                 <div class="small text-muted">{{ getServerName(file.serverUrl) }}</div>
                                             </div>
                                         </div>
@@ -560,6 +589,9 @@
                                             <button class="btn btn-sm btn-glass text-primary" @click="playVideo(file)" title="Play">
                                                 <i class="bi bi-play-fill fs-5"></i>
                                             </button>
+                                            <button v-if="isPWA && !file.isOffline" class="btn btn-sm btn-glass text-info" @click="saveOffline(file)" title="Save Offline" :disabled="file.saving">
+                                                <i class="bi" :class="file.saving ? 'bi-hourglass-split' : 'bi-save'"></i>
+                                            </button>
                                             <a class="btn btn-sm btn-glass text-success" :href="getDownloadUrl(file)" download title="Download">
                                                 <i class="bi bi-download"></i>
                                             </a>
@@ -569,8 +601,8 @@
                                         </div>
                                     </td>
                                 </tr>
-                                <tr v-if="files.length === 0">
-                                    <td colspan="4" class="text-center py-5 text-muted">
+                                <tr v-if="filteredFiles.length === 0">
+                                    <td colspan="5" class="text-center py-5 text-muted">
                                         <i class="bi bi-film fs-1 d-block mb-2 opacity-50"></i>
                                         Library is empty
                                     </td>
@@ -583,6 +615,48 @@
         </div>
 
         <!-- Modals -->
+
+        <!-- Settings Modal -->
+        <div class="modal fade" id="settingsModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>Settings</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                         <div class="mb-3">
+                            <label class="form-label">Theme</label>
+                            <select class="form-select" v-model="settings.theme" @change="saveSettings">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Default Resolution</label>
+                            <select class="form-select" v-model="settings.defaultQuality" @change="saveSettings">
+                                <option value="best">Best</option>
+                                <option value="1080">1080p</option>
+                                <option value="720">720p</option>
+                                <option value="480">480p</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                             <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" v-model="settings.autoDeleteFinished" @change="saveSettings">
+                                <label class="form-check-label">Auto-delete Downloads from job list</label>
+                             </div>
+                        </div>
+                        <hr>
+                        <h6 class="fw-bold">PWA Storage</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Offline Cache</span>
+                            <button class="btn btn-sm btn-outline-danger" @click="clearOfflineCache">Clear Cache</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- Server Modal -->
         <div class="modal fade" id="serverModal" tabindex="-1" ref="serverModal">
@@ -628,24 +702,31 @@
                             <div class="mt-2">Searching YouTube...</div>
                         </div>
                         <div v-else-if="searchResults.length === 0" class="text-center p-5 text-muted">
-                            No results found.
+                            <i class="bi bi-search fs-1 d-block mb-2 opacity-50"></i>
+                            No results found
                         </div>
-                        <div v-else class="list-group list-group-flush">
-                            <button v-for="res in searchResults" :key="res.id" class="list-group-item list-group-item-action bg-transparent text-white border-secondary d-flex gap-3 align-items-center p-3" @click="selectVideo(res)">
-                                <div style="width: 120px; flex-shrink: 0;">
+                        <div class="list-group list-group-flush">
+                            <div v-for="res in searchResults" :key="res.id" class="list-group-item list-group-item-action bg-transparent text-white border-secondary d-flex gap-3 align-items-center p-3">
+                                <div style="width: 120px; flex-shrink: 0; cursor: pointer;" @click="selectVideo(res)">
                                     <div class="ratio ratio-16x9 bg-secondary rounded overflow-hidden">
-                                        <!-- Thumbnails might not be available in flat extract, handle gracefully -->
                                         <img v-if="res.thumbnails && res.thumbnails.length > 0" :src="res.thumbnails[0].url" class="object-fit-cover">
                                         <div v-else class="d-flex align-items-center justify-content-center h-100 text-muted small">No Image</div>
                                     </div>
                                 </div>
-                                <div class="flex-grow-1">
+                                <div class="flex-grow-1" style="cursor: pointer;" @click="selectVideo(res)">
                                     <h6 class="mb-1 text-truncate-2">{{ res.title }}</h6>
                                     <div class="small text-muted mb-1">{{ res.uploader }}</div>
                                     <div class="small badge bg-secondary">{{ formatDuration(res.duration) }}</div>
                                 </div>
-                                <i class="bi bi-download fs-4 text-primary"></i>
-                            </button>
+                                <div class="d-flex flex-column gap-2">
+                                    <button class="btn btn-sm btn-primary text-nowrap" @click="selectVideo(res)">
+                                        <i class="bi bi-arrow-up-circle me-1"></i> Setup
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info text-nowrap" @click="streamSearchVideo(res)">
+                                        <i class="bi bi-play-circle me-1"></i> Stream
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -660,8 +741,22 @@
                         <h5 class="modal-title text-white">Preview</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body p-0 bg-black rounded-bottom-4 overflow-hidden d-flex justify-content-center align-items-center" style="min-height: 50vh;">
-                        <video ref="videoPlayer" controls class="w-100" :src="currentVideoUrl" style="max-height: 80vh; outline: none;"></video>
+                    <div class="modal-body p-0 bg-black rounded-bottom-4 overflow-hidden d-flex flex-column" style="min-height: 50vh;">
+                        <video ref="videoPlayer" controls class="w-100" style="max-height: 70vh; outline: none;">
+                            <track v-for="sub in currentSubtitles" :kind="sub.kind" :src="sub.url" :label="sub.label" :srclang="sub.lang">
+                        </video>
+                        <div class="p-2 bg-dark text-white d-flex gap-2 justify-content-center align-items-center">
+                            <button class="btn btn-sm btn-outline-light" @click="toggleLoop" :class="{active: isLooping}" title="Loop"><i class="bi bi-repeat"></i></button>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">Speed: {{ playbackRate }}x</button>
+                                <ul class="dropdown-menu dropdown-menu-dark">
+                                    <li v-for="rate in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]" :key="rate">
+                                        <a class="dropdown-item" href="#" @click.prevent="setSpeed(rate)">{{ rate }}x</a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm btn-outline-light" @click="togglePiP" title="Picture in Picture"><i class="bi bi-pip"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -831,7 +926,7 @@
                             <div class="row g-2 mb-2">
                                 <div class="col-md-3">
                                     <select class="form-select form-select-sm" v-model="currentLogFile" @change="viewLogFile(currentLogFile)">
-                                        <option v-for="f in logFiles" :value="f.name" :key="f.name">{{ f.name }} ({{ formatBytes(f.size) }})</option>
+                                        <option v-for="f in logFiles" :value="f.name" :key="f.name">{{ f.name }} ({{ formatSize(f.size) }})</option>
                                     </select>
                                 </div>
                                 <div class="col-md-7">
@@ -1132,12 +1227,179 @@
                     searchResults: [],
                     isSearching: false,
                     
+                    // Library Features
+                    selectedFiles: [],
+                    showAllJobs: false,
+                    isPWA: window.matchMedia('(display-mode: standalone)').matches,
+                    currentSubtitles: [],
+                    playbackRate: 1.0,
+                    isLooping: false,
+                    
+                    settings: {
+                        theme: 'light',
+                        defaultQuality: '720',
+                        autoDeleteFinished: false
+                    },
+                    
                     // Edit State
                     editingUser: null,
                     editingFile: null
                 }
             },
+            computed: {
+                filteredFiles() {
+                    return this.files.filter(f => {
+                        const ext = f.filename.split('.').pop().toLowerCase();
+                        return !['vtt', 'srt', 'ass', 'lrc', 'ttml', 'srv3', 'json', 'part', 'ytdl'].includes(ext);
+                    });
+                },
+                visibleJobs() {
+                    if (this.showAllJobs) return this.jobs;
+                    const now = Date.now() / 1000;
+                    return this.jobs.filter(j => {
+                        if (['queued', 'downloading'].includes(j.status)) return true;
+                        // Show finished/error for 5 mins
+                        return (now - j.created_at) < 300; 
+                    });
+                },
+                allSelected() {
+                     return this.filteredFiles.length > 0 && this.selectedFiles.length === this.filteredFiles.length;
+                }
+            },
             methods: {
+                // --- Settings ---
+                loadSettings() {
+                    const s = localStorage.getItem('ytdlp_settings');
+                    if (s) {
+                         this.settings = JSON.parse(s);
+                         this.form.quality = this.settings.defaultQuality || '720';
+                         this.theme = this.settings.theme;
+                         document.documentElement.setAttribute('data-theme', this.theme);
+                    }
+                },
+                saveSettings() {
+                    localStorage.setItem('ytdlp_settings', JSON.stringify(this.settings));
+                    this.theme = this.settings.theme;
+                    document.documentElement.setAttribute('data-theme', this.theme);
+                },
+                openSettings() {
+                    const modal = new bootstrap.Modal(document.getElementById('settingsModal'));
+                    modal.show();
+                },
+
+                // --- PWA Offline ---
+                async checkOfflineStatus() {
+                    if (!this.isPWA) return;
+                    if ('caches' in window) {
+                         const cache = await caches.open('ytdlp-media-v1');
+                         for (const f of this.files) {
+                             const url = this.getFileUrl(f);
+                             const match = await cache.match(url);
+                             if (match) f.isOffline = true;
+                         }
+                    }
+                },
+                async saveOffline(file) {
+                    if (!confirm(`Save ${file.filename} for offline viewing? This may take time.`)) return;
+                    file.saving = true;
+                    try {
+                        const url = this.getFileUrl(file); // Use play URL for caching
+                        const cache = await caches.open('ytdlp-media-v1');
+                        await cache.add(url);
+                        file.isOffline = true;
+                        alert('Saved for offline!');
+                    } catch (e) {
+                        alert('Offline save failed: ' + e.message);
+                    } finally {
+                        file.saving = false;
+                    }
+                },
+                async clearOfflineCache() {
+                    if (!confirm('Clear all offline videos?')) return;
+                    if ('caches' in window) {
+                        await caches.delete('ytdlp-media-v1');
+                        this.files.forEach(f => f.isOffline = false);
+                        alert('Cache cleared');
+                    }
+                },
+                
+                // --- Video Player Controls ---
+                setSpeed(rate) {
+                    this.playbackRate = rate;
+                    if (this.$refs.videoPlayer) this.$refs.videoPlayer.playbackRate = rate;
+                },
+                toggleLoop() {
+                    this.isLooping = !this.isLooping;
+                    if (this.$refs.videoPlayer) this.$refs.videoPlayer.loop = this.isLooping;
+                },
+                async togglePiP() {
+                    if (this.$refs.videoPlayer) {
+                        if (document.pictureInPictureElement) {
+                            await document.exitPictureInPicture();
+                        } else {
+                            await this.$refs.videoPlayer.requestPictureInPicture();
+                        }
+                    }
+                },
+
+                toggleSelectAll() {
+                    if (this.allSelected) {
+                        this.selectedFiles = [];
+                    } else {
+                        this.selectedFiles = this.filteredFiles.map(f => f.filename);
+                    }
+                },
+                async deleteSelectedFiles() {
+                    if (this.selectedFiles.length === 0) return;
+                    if (!confirm(`Delete ${this.selectedFiles.length} files?`)) return;
+                    
+                    try {
+                        const res = await axios.post('/api/files/bulk_delete', { filenames: this.selectedFiles });
+                        
+                        let msg = `Deleted ${res.data.deleted.length} files.`;
+                        if (res.data.errors.length > 0) {
+                            msg += `\nErrors: ${res.data.errors.join(', ')}`;
+                        }
+                        alert(msg);
+                        this.selectedFiles = [];
+                        this.fetchAllData();
+                    } catch (e) {
+                         alert("Bulk delete failed: " + e.message);
+                    }
+                },
+                async downloadSelectedFiles() {
+                     if (this.selectedFiles.length === 0) return;
+                     
+                     // If just one file, use normal download
+                     if (this.selectedFiles.length === 1) {
+                         const f = this.filteredFiles.find(file => file.filename === this.selectedFiles[0]);
+                         if (f) {
+                             window.location.href = this.getDownloadUrl(f);
+                             return;
+                         }
+                     }
+
+                     this.loading = true; // Use loading indicator if available, or just wait
+                     // Trigger Bulk Download
+                     try {
+                         const response = await axios.post('/api/files/bulk_download', 
+                            { filenames: this.selectedFiles }, 
+                            { responseType: 'blob' }
+                         );
+                         
+                         const url = window.URL.createObjectURL(new Blob([response.data]));
+                         const link = document.createElement('a');
+                         link.href = url;
+                         link.setAttribute('download', 'bulk_downloads.zip');
+                         document.body.appendChild(link);
+                         link.click();
+                         document.body.removeChild(link);
+                     } catch (e) {
+                         alert("Bulk download failed: " + e.message);
+                     } finally {
+                         this.loading = false;
+                     }
+                },
                 estimateDeviceName() {
                     const ua = navigator.userAgent;
                     if (/mobile/i.test(ua)) return "Mobile Device";
@@ -1147,6 +1409,26 @@
                     if (/Mac/i.test(ua)) return "Mac";
                     if (/Linux/i.test(ua)) return "Linux PC";
                     return "Unknown Device";
+                },
+                async pasteUrl() {
+                    try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) this.form.url = text;
+                    } catch (e) {
+                         alert("Failed to read clipboard: " + e.message);
+                    }
+                },
+                streamSearchVideo(res) {
+                    this.currentVideoUrl = '/api/stream?url=' + encodeURIComponent(res.url);
+                    const modal = this.getModal('videoModal');
+                    if (modal) {
+                        modal.show();
+                        this.$nextTick(() => {
+                            if (this.$refs.videoPlayer) {
+                                this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
+                            }
+                        });
+                    }
                 },
                 // --- Log Management ---
                 async loadLogFiles() {
@@ -1573,6 +1855,8 @@
 
                     const allFiles = (await Promise.all(filePromises)).flat();
                     this.files = allFiles.sort((a, b) => b.created_at - a.created_at);
+                    
+                    this.checkOfflineStatus();
                 },
 
                 // --- Actions ---
@@ -1626,8 +1910,8 @@
                     this.form.url = res.url;
                     const modal = this.getModal('searchModal');
                     if (modal) modal.hide();
-                    // Trigger download immediately
-                    this.startDownload();
+                    // Do not auto-start
+                    // this.startDownload();
                 },
                 
                 formatDuration(seconds) {
@@ -1747,6 +2031,19 @@
                 }
             },
             mounted() {
+                // Initialize Settings
+                this.loadSettings();
+
+                // Register Service Worker
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/static/sw.js')
+                        .then(reg => {
+                            console.log('SW registered!', reg);
+                            this.isPWA = true;
+                        })
+                        .catch(err => console.log('SW registration failed', err));
+                }
+
                 // Load Theme
                 const savedTheme = localStorage.getItem('theme');
                 if (savedTheme) {
