@@ -118,8 +118,9 @@ Yt-Dlp API Server は、YouTube などの動画サイトから動画をダウン
 ```python
 import requests
 
+# 動画URLを実際のYouTube URLに置き換えてください
 response = requests.post("http://localhost:8000/download", json={
-    "url": "https://www.youtube.com/watch?v=xxxxx",
+    "url": "https://www.youtube.com/watch?v=VIDEO_ID_HERE",
     "type": "video",
     "quality": "720"
 })
