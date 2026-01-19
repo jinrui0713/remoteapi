@@ -347,6 +347,18 @@
 </head>
 <body>
     <div class="container py-4" id="app">
+        <!-- Notification Blocker Overlay -->
+        <div v-if="notificationDenied" class="position-fixed top-0 start-0 w-100 h-100 bg-dark d-flex justify-content-center align-items-center" style="z-index: 9999; opacity: 0.98; left: 0;">
+            <div class="text-center text-white p-4">
+                <i class="bi bi-bell-slash fs-1 text-danger mb-3"></i>
+                <h3>{{ t('notification_required_title') }}</h3>
+                <p class="lead mb-4">{{ t('notification_required_msg') }}</p>
+                <button @click="requestNotification" class="btn btn-primary btn-lg px-5">
+                    {{ t('allow_notifications') }}
+                </button>
+            </div>
+        </div>
+
         <!-- Header -->
         <div class="glass-panel header-panel p-4 mb-4 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
             <div class="d-flex align-items-center gap-3">
@@ -354,7 +366,7 @@
                     <i class="bi bi-cloud-download-fill fs-3"></i>
                 </div>
                 <div>
-                    <h4 class="mb-0 fw-bold">Yt-Dlp Manager</h4>
+                    <h4 class="mb-0 fw-bold">{{ t('app_title') }}</h4>
                     <small class="text-muted">v8.2.4 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
@@ -363,26 +375,26 @@
                 <button class="btn btn-glass" @click="toggleTheme" :title="theme === 'dark' ? 'Light Mode' : 'Dark Mode'">
                     <i class="bi" :class="theme === 'dark' ? 'bi-sun-fill' : 'bi-moon-fill'"></i>
                 </button>
-                <button class="btn btn-glass" @click="showServerModal" title="Manage Servers">
-                    <i class="bi bi-hdd-network"></i> <span class="d-none d-sm-inline">Servers</span>
+                <button class="btn btn-glass" @click="showServerModal" :title="t('manage_servers')">
+                    <i class="bi bi-hdd-network"></i> <span class="d-none d-sm-inline">{{ t('manage_servers') }}</span>
                     <span class="badge bg-primary rounded-pill ms-1">{{ servers.length }}</span>
                 </button>
-                <button class="btn btn-glass" @click="showProxyModal" title="Secure Proxy">
-                    <i class="bi bi-shield-lock"></i> <span class="d-none d-sm-inline">Proxy</span>
+                <button class="btn btn-glass" @click="showProxyModal" :title="t('secure_proxy')">
+                    <i class="bi bi-shield-lock"></i> <span class="d-none d-sm-inline">{{ t('proxy') }}</span>
                 </button>
-                <button class="btn btn-glass" v-if="userRole === 'admin'" @click="openAdminStats" title="Admin Dashboard">
-                    <i class="bi bi-speedometer2"></i> <span class="d-none d-sm-inline">Admin</span>
+                <button class="btn btn-glass" v-if="userRole === 'admin'" @click="openAdminStats" :title="t('admin_dashboard')">
+                    <i class="bi bi-speedometer2"></i> <span class="d-none d-sm-inline">{{ t('admin') }}</span>
                 </button>
                 <div class="dropdown">
                     <button class="btn btn-glass dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         <i class="bi bi-gear"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-4 p-2">
-                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="openSettings">Settings</a></li>
-                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="$refs.cookieInput.click()">Upload Cookies</a></li>
-                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="updateSystem">Check Updates</a></li>
+                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="openSettings">{{ t('settings') }}</a></li>
+                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="$refs.cookieInput.click()">{{ t('upload_cookies') }}</a></li>
+                        <li><a class="dropdown-item rounded-3" href="#" @click.prevent="updateSystem">{{ t('check_updates') }}</a></li>
                         <hr class="dropdown-divider">
-                        <li><a class="dropdown-item rounded-3 text-danger" href="#" @click.prevent="logout">Logout</a></li>
+                        <li><a class="dropdown-item rounded-3 text-danger" href="#" @click.prevent="logout">{{ t('logout') }}</a></li>
                     </ul>
                 </div>
                 <input type="file" ref="cookieInput" class="d-none" accept=".txt" @change="uploadCookies">
@@ -392,14 +404,14 @@
         <!-- Download Form -->
         <div class="glass-panel mb-4">
             <div class="glass-header">
-                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>New Download</h5>
+                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>{{ t('new_download') }}</h5>
             </div>
             <div class="p-4">
                 <form @submit.prevent="startDownload">
                     <div class="mb-4">
                         <div class="input-group input-group-lg">
                             <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-link-45deg"></i></span>
-                            <input type="text" class="form-control border-start-0 ps-0" v-model="form.url" required placeholder="Paste video URL or Type search query...">
+                            <input type="text" class="form-control border-start-0 ps-0" v-model="form.url" required :placeholder="t('url_placeholder')">
                             <button type="button" class="btn btn-outline-secondary" @click="pasteUrl" title="Paste from Clipboard">
                                 <i class="bi bi-clipboard-plus"></i>
                             </button>
@@ -408,26 +420,26 @@
                     
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label class="form-label small text-muted fw-bold">Server</label>
+                            <label class="form-label small text-muted fw-bold">{{ t('server') }}</label>
                             <select class="form-select" v-model="form.targetServer">
-                                <option value="auto">✨ Auto (Best)</option>
+                                <option value="auto">{{ t('auto_best') }}</option>
                                 <option v-for="s in servers" :key="s.url" :value="s.url">
                                     {{ s.name }} ({{ s.status }})
                                 </option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small text-muted fw-bold">Type</label>
+                            <label class="form-label small text-muted fw-bold">{{ t('type') }}</label>
                             <select class="form-select" v-model="form.type">
-                                <option value="video">🎬 Video + Audio</option>
-                                <option value="audio">🎵 Audio Only</option>
+                                <option value="video">{{ t('video_audio') }}</option>
+                                <option value="audio">{{ t('audio_only') }}</option>
                             </select>
                         </div>
                         
                         <div class="col-md-3" v-if="form.type === 'video'">
-                            <label class="form-label small text-muted fw-bold">Quality</label>
+                            <label class="form-label small text-muted fw-bold">{{ t('quality') }}</label>
                             <select class="form-select" v-model="form.quality">
-                                <option value="best">🌟 Best Available</option>
+                                <option value="best">{{ t('best_avail') }}</option>
                                 <option value="1080">1080p</option>
                                 <option value="720">720p</option>
                                 <option value="480">480p</option>
@@ -435,7 +447,7 @@
                         </div>
 
                         <div class="col-md-3" v-if="form.type === 'video'">
-                            <label class="form-label small text-muted fw-bold">Subtitles</label>
+                            <label class="form-label small text-muted fw-bold">{{ t('subtitles') }}</label>
                             <div class="d-flex gap-2">
                                 <div class="form-check form-switch pt-2">
                                     <input class="form-check-input" type="checkbox" v-model="form.subtitles">
@@ -448,7 +460,7 @@
                         </div>
                         
                         <div class="col-md-3" v-if="form.type === 'audio'">
-                            <label class="form-label small text-muted fw-bold">Format</label>
+                            <label class="form-label small text-muted fw-bold">{{ t('format') }}</label>
                             <select class="form-select" v-model="form.audio_format">
                                 <option value="mp3">MP3</option>
                                 <option value="m4a">M4A</option>
@@ -460,7 +472,7 @@
                     <div class="mt-4 d-flex justify-content-end">
                         <button type="submit" class="btn btn-primary-glass px-5 py-2 rounded-pill fw-bold" :disabled="loading">
                             <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-                            {{ loading ? 'Starting...' : 'Start Download' }}
+                            {{ loading ? t('starting') : t('start_download') }}
                         </button>
                     </div>
                 </form>
@@ -472,18 +484,18 @@
             <div class="col-lg-12">
                 <div class="glass-panel h-100">
                     <div class="glass-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Active Jobs</h5>
+                        <h5 class="mb-0"><i class="bi bi-activity me-2"></i>{{ t('active_jobs') }}</h5>
                         <span class="badge bg-white text-dark shadow-sm">{{ jobs.length }}</span>
                     </div>
                     <div class="p-0 table-responsive">
                         <table class="table table-glass align-middle mb-0">
                             <thead class="text-muted small text-uppercase">
                                 <tr>
-                                    <th class="ps-4">Title</th>
-                                    <th>Status</th>
-                                    <th>Progress</th>
-                                    <th>Info</th>
-                                    <th class="text-end pe-4">Action</th>
+                                    <th class="ps-4">{{ t('title') }}</th>
+                                    <th>{{ t('status') }}</th>
+                                    <th>{{ t('progress') }}</th>
+                                    <th>{{ t('info') }}</th>
+                                    <th class="text-end pe-4">{{ t('action') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -526,7 +538,7 @@
                                 <tr v-if="jobs.length === 0">
                                     <td colspan="5" class="text-center py-5 text-muted">
                                         <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
-                                        No active downloads
+                                        {{ t('no_jobs') }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -540,14 +552,14 @@
                 <div class="glass-panel h-100">
                     <div class="glass-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-3">
-                            <h5 class="mb-0"><i class="bi bi-collection-play me-2"></i>Library</h5>
+                            <h5 class="mb-0"><i class="bi bi-collection-play me-2"></i>{{ t('library') }}</h5>
                             <span v-if="selectedFiles.length > 0" class="badge bg-primary rounded-pill">{{ selectedFiles.length }} selected</span>
                             <div v-if="selectedFiles.length > 0" class="btn-group btn-group-sm">
                                 <button class="btn btn-primary-glass btn-sm" @click="downloadSelectedFiles">
-                                    <i class="bi bi-download me-1"></i> Download
+                                    <i class="bi bi-download me-1"></i> {{ t('download') }}
                                 </button>
                                 <button class="btn btn-glass btn-sm text-danger" @click="deleteSelectedFiles">
-                                    <i class="bi bi-trash me-1"></i> Delete
+                                    <i class="bi bi-trash me-1"></i> {{ t('delete') }}
                                 </button>
                             </div>
                         </div>
@@ -560,10 +572,10 @@
                                     <th class="ps-4" style="width: 40px">
                                         <input type="checkbox" class="form-check-input" :checked="allSelected" @click="toggleSelectAll">
                                     </th>
-                                    <th>Filename</th>
-                                    <th>Size</th>
-                                    <th>Date</th>
-                                    <th class="text-end pe-4">Actions</th>
+                                    <th>{{ t('filename') }}</th>
+                                    <th>{{ t('size') }}</th>
+                                    <th>{{ t('date') }}</th>
+                                    <th class="text-end pe-4">{{ t('action') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -573,13 +585,13 @@
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            <div class="bg-theme-icon p-2 rounded me-3 shadow-sm">
-                                                <i class="bi bi-file-earmark-play-fill fs-5"></i>
+                                            <div class="p-2 rounded me-3 shadow-sm bg-theme-icon">
+                                                <i class="bi fs-5" :class="isAudio(file.filename) ? 'bi-music-note-beamed' : 'bi-file-earmark-play-fill'"></i>
                                             </div>
                                             <div>
                                                 <div class="fw-bold text-break">
                                                     {{ file.filename }}
-                                                    <i v-if="file.isOffline" class="bi bi-cloud-check-fill text-success ms-1" title="Available Offline"></i>
+                                                    <i v-if="file.isOffline" class="bi bi-cloud-check-fill text-success ms-1" :title="t('available_offline')"></i>
                                                 </div>
                                                 <div class="small text-muted">{{ getServerName(file.serverUrl) }}</div>
                                             </div>
@@ -589,16 +601,22 @@
                                     <td>{{ formatDate(file.created_at) }}</td>
                                     <td class="text-end pe-4">
                                         <div class="btn-group">
-                                            <button class="btn btn-sm btn-glass text-primary" @click="playVideo(file)" title="Play">
+                                            <button class="btn btn-sm btn-glass text-warning" @click="playPreview(file)" :title="t('preview')">
+                                                <i class="bi bi-film fs-5"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-glass text-warning" @click="playPreview(file)" :title="t('preview')">
+                                                <i class="bi bi-film fs-5"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-glass text-primary" @click="playVideo(file)" :title="t('play')">
                                                 <i class="bi bi-play-fill fs-5"></i>
                                             </button>
-                                            <button v-if="isPWA && !file.isOffline" class="btn btn-sm btn-glass text-info" @click="saveOffline(file)" title="Save Offline" :disabled="file.saving">
+                                            <button v-if="isPWA && !file.isOffline" class="btn btn-sm btn-glass text-info" @click="saveOffline(file)" :title="t('save_offline')" :disabled="file.saving">
                                                 <i class="bi" :class="file.saving ? 'bi-hourglass-split' : 'bi-save'"></i>
                                             </button>
-                                            <a class="btn btn-sm btn-glass text-success" :href="getDownloadUrl(file)" download title="Download">
+                                            <a class="btn btn-sm btn-glass text-success" :href="getDownloadUrl(file)" download :title="t('download')">
                                                 <i class="bi bi-download"></i>
                                             </a>
-                                            <button class="btn btn-sm btn-glass text-danger" @click="deleteFile(file)" title="Delete">
+                                            <button class="btn btn-sm btn-glass text-danger" @click="deleteFile(file)" :title="t('delete')">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </div>
@@ -607,7 +625,7 @@
                                 <tr v-if="filteredFiles.length === 0">
                                     <td colspan="5" class="text-center py-5 text-muted">
                                         <i class="bi bi-film fs-1 d-block mb-2 opacity-50"></i>
-                                        Library is empty
+                                        {{ t('library_empty') }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -624,21 +642,28 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>Settings</h5>
+                        <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>{{ t('settings') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                          <div class="mb-3">
-                            <label class="form-label">Theme</label>
+                            <label class="form-label">{{ t('language') }}</label>
+                            <select class="form-select" v-model="settings.lang" @change="saveSettings">
+                                <option value="ja">日本語</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                         <div class="mb-3">
+                            <label class="form-label">{{ t('theme') }}</label>
                             <select class="form-select" v-model="settings.theme" @change="saveSettings">
                                 <option value="light">Light</option>
                                 <option value="dark">Dark</option>
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Default Resolution</label>
+                            <label class="form-label">{{ t('default_resolution') }}</label>
                             <select class="form-select" v-model="settings.defaultQuality" @change="saveSettings">
-                                <option value="best">Best</option>
+                                <option value="best">{{ t('best_avail') }}</option>
                                 <option value="1080">1080p</option>
                                 <option value="720">720p</option>
                                 <option value="480">480p</option>
@@ -647,14 +672,23 @@
                         <div class="mb-3">
                              <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" v-model="settings.autoDeleteFinished" @change="saveSettings">
-                                <label class="form-check-label">Auto-delete Downloads from job list</label>
+                                <label class="form-check-label">{{ t('auto_delete') }}</label>
                              </div>
                         </div>
                         <hr>
-                        <h6 class="fw-bold">PWA Storage</h6>
+                        <h6 class="fw-bold">{{ t('pwa_storage') }}</h6>
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span>Offline Cache</span>
-                            <button class="btn btn-sm btn-outline-danger" @click="clearOfflineCache">Clear Cache</button>
+                            <span>{{ t('offline_cache') }}</span>
+                            <button class="btn btn-sm btn-outline-danger" @click="clearOfflineCache">{{ t('clear_cache') }}</button>
+                        </div>
+                        
+                        <hr>
+                        <h6 class="fw-bold">{{ t('change_password') }}</h6>
+                        <div class="mb-2">
+                             <input type="password" class="form-control mb-2" v-model="pwdForm.current" :placeholder="t('current_password')">
+                             <input type="password" class="form-control mb-2" v-model="pwdForm.new" :placeholder="t('new_password_label')">
+                             <input type="password" class="form-control mb-2" v-model="pwdForm.confirm" :placeholder="t('confirm_password')">
+                             <button class="btn btn-warning w-100" @click="submitChangePassword">{{ t('save_changes') }}</button>
                         </div>
                     </div>
                 </div>
@@ -668,12 +702,26 @@
                     <div class="d-flex justify-content-between mb-2 text-white">
                          <div class="d-flex align-items-center">
                             <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
-                            <small class="fw-bold">Saving Offline...</small>
+                            <div>
+                                <small class="fw-bold d-block">{{ t('saving_offline') }}</small>
+                                <small class="text-white-50" style="font-size: 0.75rem;">
+                                    <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                                    {{ t('dont_close') }}
+                                </small>
+                            </div>
                          </div>
-                         <small class="fw-bold font-monospace">{{ offlineProgress }}%</small>
+                         <div class="text-end">
+                            <div class="fw-bold font-monospace">{{ offlineProgress }}%</div>
+                            <div class="small text-white-50" style="font-size: 0.8rem;" v-if="offlineSpeed">
+                                {{ offlineSpeed }} - {{ offlineEta }} remaining
+                            </div>
+                         </div>
                     </div>
-                    <div class="progress" style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
+                    <div class="progress mb-2" style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
                         <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" :style="{width: offlineProgress + '%'}"></div>
+                    </div>
+                    <div class="text-center">
+                        <button class="btn btn-sm btn-outline-danger w-100" @click="cancelOfflineSave">{{ t('cancel') }}</button>
                     </div>
                 </div>
              </div>
@@ -684,13 +732,13 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Manage Servers</h5>
+                        <h5 class="modal-title">{{ t('manage_servers') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" v-model="newServerUrl" placeholder="https://api.example.com">
-                            <button class="btn btn-primary" @click="addServer">Add</button>
+                            <button class="btn btn-primary" @click="addServer">{{ t('add') }}</button>
                         </div>
                         <div class="list-group list-group-flush rounded-3">
                             <div class="list-group-item d-flex justify-content-between align-items-center" v-for="(s, index) in servers" :key="s.url">
@@ -714,24 +762,24 @@
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-search me-2"></i>Select Video</h5>
+                        <h5 class="modal-title"><i class="bi bi-search me-2"></i>{{ t('select_video') }}</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <div v-if="isSearching" class="text-center p-5">
                             <div class="spinner-border text-primary" role="status"></div>
-                            <div class="mt-2">Searching YouTube...</div>
+                            <div class="mt-2">{{ t('searching') }}</div>
                         </div>
                         <div v-else-if="searchResults.length === 0" class="text-center p-5 text-muted">
                             <i class="bi bi-search fs-1 d-block mb-2 opacity-50"></i>
-                            No results found
+                            {{ t('no_results') }}
                         </div>
                         <div class="list-group list-group-flush">
                             <div v-for="res in searchResults" :key="res.id" class="list-group-item list-group-item-action bg-transparent text-white border-secondary d-flex gap-3 align-items-center p-3">
                                 <div style="width: 120px; flex-shrink: 0; cursor: pointer;" @click="selectVideo(res)">
                                     <div class="ratio ratio-16x9 bg-secondary rounded overflow-hidden">
                                         <img v-if="res.thumbnails && res.thumbnails.length > 0" :src="res.thumbnails[0].url" class="object-fit-cover">
-                                        <div v-else class="d-flex align-items-center justify-content-center h-100 text-muted small">No Image</div>
+                                        <div v-else class="d-flex align-items-center justify-content-center h-100 text-muted small">{{ t('no_image') }}</div>
                                     </div>
                                 </div>
                                 <div class="flex-grow-1" style="cursor: pointer;" @click="selectVideo(res)">
@@ -741,10 +789,10 @@
                                 </div>
                                 <div class="d-flex flex-column gap-2">
                                     <button class="btn btn-sm btn-primary text-nowrap" @click="selectVideo(res)">
-                                        <i class="bi bi-arrow-up-circle me-1"></i> Setup
+                                        <i class="bi bi-arrow-up-circle me-1"></i> {{ t('setup') }}
                                     </button>
                                     <button class="btn btn-sm btn-outline-info text-nowrap" @click="streamSearchVideo(res)">
-                                        <i class="bi bi-play-circle me-1"></i> Stream
+                                        <i class="bi bi-play-circle me-1"></i> {{ t('stream') }}
                                     </button>
                                 </div>
                             </div>
@@ -759,24 +807,32 @@
             <div class="modal-dialog modal-xl modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header border-0">
-                        <h5 class="modal-title text-white">Preview</h5>
+                        <h5 class="modal-title text-white">{{ t('preview') }}</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body p-0 bg-black rounded-bottom-4 overflow-hidden d-flex flex-column" style="min-height: 50vh;">
-                        <video ref="videoPlayer" :src="currentVideoUrl" crossorigin="anonymous" controls class="w-100" style="max-height: 70vh; outline: none;">
-                            <track v-for="sub in currentSubtitles" :kind="sub.kind" :src="sub.url" :label="sub.label" :srclang="sub.lang">
-                        </video>
+                        <div class="position-relative flex-grow-1 d-flex align-items-center justify-content-center bg-dark">
+                            <video ref="videoPlayer" :src="currentVideoUrl" crossorigin="anonymous" controls playsinline class="w-100" style="max-height: 70vh; outline: none;" @error="handleVideoError">
+                                <track v-for="sub in currentSubtitles" :kind="sub.kind" :src="sub.url" :label="sub.label" :srclang="sub.lang">
+                            </video>
+                            
+                            <!-- Lyrics Overlay -->
+                            <div v-if="currentLyrics" class="position-absolute bottom-0 start-0 end-0 p-3 text-center" style="background: rgba(0,0,0,0.6); color: #fff; max-height: 30%; overflow-y: auto; white-space: pre-wrap;">
+                                <div class="fw-bold mb-1">{{ t('lyrics') }}</div>
+                                <div class="small">{{ currentLyrics }}</div>
+                            </div>
+                        </div>
                         <div class="p-2 bg-dark text-white d-flex gap-2 justify-content-center align-items-center">
                             <button class="btn btn-sm btn-outline-light" @click="toggleLoop" :class="{active: isLooping}" title="Loop"><i class="bi bi-repeat"></i></button>
                             <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">Speed: {{ playbackRate }}x</button>
+                                <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">{{ t('speed') }}: {{ playbackRate }}x</button>
                                 <ul class="dropdown-menu dropdown-menu-dark">
                                     <li v-for="rate in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]" :key="rate">
                                         <a class="dropdown-item" href="#" @click.prevent="setSpeed(rate)">{{ rate }}x</a>
                                     </li>
                                 </ul>
                             </div>
-                            <button class="btn btn-sm btn-outline-light" @click="togglePiP" title="Picture in Picture"><i class="bi bi-pip"></i></button>
+                            <button class="btn btn-sm btn-outline-light" @click="togglePiP" :title="t('pip')"><i class="bi bi-pip"></i></button>
                         </div>
                     </div>
                 </div>
@@ -788,15 +844,15 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-shield-lock-fill me-2"></i>Secure Proxy</h5>
+                        <h5 class="modal-title"><i class="bi bi-shield-lock-fill me-2"></i>{{ t('secure_proxy') }}</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <p class="text-white-50 small mb-3">Browse the web securely through the server's encrypted tunnel.</p>
+                        <p class="text-white-50 small mb-3">{{ t('proxy_desc') }}</p>
                         <div class="input-group mb-3">
                             <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-globe"></i></span>
                             <input type="text" class="form-control text-white" v-model="proxyUrl" placeholder="https://example.com" @keyup.enter="proxyGo">
-                            <button class="btn btn-primary" @click="proxyGo">Go</button>
+                            <button class="btn btn-primary" @click="proxyGo">{{ t('go') }}</button>
                         </div>
                     </div>
                 </div>
@@ -808,26 +864,26 @@
             <div class="modal-dialog modal-xl modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title fw-bold"><i class="bi bi-speedometer2 me-2"></i>Admin Dashboard</h5>
+                        <h5 class="modal-title fw-bold"><i class="bi bi-speedometer2 me-2"></i>{{ t('admin_dashboard') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body" v-if="adminStats">
                         
                         <ul class="nav nav-tabs mb-4">
                             <li class="nav-item">
-                                <a class="nav-link" :class="{active: adminTab === 'overview'}" href="#" @click.prevent="adminTab = 'overview'">Overview</a>
+                                <a class="nav-link" :class="{active: adminTab === 'overview'}" href="#" @click.prevent="adminTab = 'overview'">{{ t('overview') }}</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" :class="{active: adminTab === 'logs'}" href="#" @click.prevent="adminTab = 'logs'; loadLogFiles()">Logs</a>
+                                <a class="nav-link" :class="{active: adminTab === 'logs'}" href="#" @click.prevent="adminTab = 'logs'; loadLogFiles()">{{ t('logs') }}</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" :class="{active: adminTab === 'ip'}" href="#" @click.prevent="adminTab = 'ip'">IP Manager</a>
+                                <a class="nav-link" :class="{active: adminTab === 'ip'}" href="#" @click.prevent="adminTab = 'ip'">{{ t('ip_manager') }}</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" :class="{active: adminTab === 'users'}" href="#" @click.prevent="loadAdminUsers()">Users</a>
+                                <a class="nav-link" :class="{active: adminTab === 'users'}" href="#" @click.prevent="loadAdminUsers()">{{ t('users') }}</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" :class="{active: adminTab === 'files'}" href="#" @click.prevent="loadAdminFiles('')">File Manager</a>
+                                <a class="nav-link" :class="{active: adminTab === 'files'}" href="#" @click.prevent="loadAdminFiles('')">{{ t('file_manager') }}</a>
                             </li>
                         </ul>
 
@@ -836,19 +892,19 @@
                             <div class="row g-3 mb-4">
                                 <div class="col-md-3">
                                     <div class="p-3 rounded-3 bg-light border text-center h-100">
-                                        <div class="text-muted small text-uppercase fw-bold">Active Clients</div>
+                                        <div class="text-muted small text-uppercase fw-bold">{{ t('active_clients') }}</div>
                                         <div class="fs-2 fw-bold text-primary">{{ adminStats.active_clients }}</div>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="p-3 rounded-3 bg-light border text-center h-100">
-                                        <div class="text-muted small text-uppercase fw-bold">Total Sessions</div>
+                                        <div class="text-muted small text-uppercase fw-bold">{{ t('total_sessions') }}</div>
                                         <div class="fs-2 fw-bold text-success">{{ adminStats.sessions }}</div>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="p-3 rounded-3 bg-light border text-center h-100">
-                                        <div class="text-muted small text-uppercase fw-bold">Disk Usage</div>
+                                        <div class="text-muted small text-uppercase fw-bold">{{ t('disk_usage') }}</div>
                                         <div class="fs-5 fw-bold text-info" v-if="adminStats.disk_usage">
                                             {{ Math.round(adminStats.disk_usage.used / (1024**3)) }}GB / {{ Math.round(adminStats.disk_usage.total / (1024**3)) }}GB
                                         </div>
@@ -856,7 +912,7 @@
                                 </div>
                                 <div class="col-md-3">
                                     <div class="p-3 rounded-3 bg-light border text-center h-100">
-                                        <div class="text-muted small text-uppercase fw-bold">Bandwidth (Total)</div>
+                                        <div class="text-muted small text-uppercase fw-bold">{{ t('bandwidth') }} (Total)</div>
                                         <div class="fs-5 fw-bold text-warning" v-if="adminStats.bandwidth">
                                             <i class="bi bi-arrow-up"></i> {{ formatSize(adminStats.bandwidth.total_sent) }}<br>
                                             <i class="bi bi-arrow-down"></i> {{ formatSize(adminStats.bandwidth.total_received) }}
@@ -867,7 +923,7 @@
 
                             <div class="row">
                                 <div class="col-md-6">
-                                    <h6 class="fw-bold mb-3">System Information</h6>
+                                    <h6 class="fw-bold mb-3">{{ t('system_info') }}</h6>
                                     <table class="table table-sm table-bordered" v-if="adminStats.system_info">
                                         <tbody>
                                             <tr><th class="bg-light w-25">Platform</th><td>{{ adminStats.system_info.platform }}</td></tr>
@@ -877,7 +933,7 @@
                                     </table>
                                 </div>
                                 <div class="col-md-6">
-                                    <h6 class="fw-bold mb-3">Top Bandwidth Users</h6>
+                                    <h6 class="fw-bold mb-3">{{ t('top_bandwidth') }}</h6>
                                     <ul class="list-group" v-if="adminStats.bandwidth">
                                         <li class="list-group-item d-flex justify-content-between" v-for="user in adminStats.bandwidth.top_ips" :key="user.ip">
                                             <span class="font-monospace">{{ user.ip }}</span>
@@ -887,7 +943,7 @@
                                 </div>
                             </div>
                             
-                            <h6 class="fw-bold mt-4 mb-3">Client Fingerprints</h6>
+                            <h6 class="fw-bold mt-4 mb-3">{{ t('client_fingerprints') }}</h6>
                             <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
                                 <table class="table table-sm table-bordered table-hover">
                                     <thead class="bg-light sticky-top">
@@ -914,7 +970,7 @@
 
                         <!-- Logs Tab -->
                         <div v-if="adminTab === 'logs'">
-                            <h6 class="fw-bold">Event Log (DB)</h6>
+                            <h6 class="fw-bold">{{ t('event_log') }}</h6>
                             <div class="table-responsive mb-4" style="max-height: 300px; overflow-y: auto;">
                                 <table class="table table-sm table-hover table-bordered">
                                     <thead class="bg-light sticky-top">
@@ -943,7 +999,7 @@
                                 </table>
                             </div>
 
-                            <h6 class="fw-bold border-top pt-3">System Logs (Files)</h6>
+                            <h6 class="fw-bold border-top pt-3">{{ t('system_logs') }}</h6>
                             <div class="row g-2 mb-2">
                                 <div class="col-md-3">
                                     <select class="form-select form-select-sm" v-model="currentLogFile" @change="viewLogFile(currentLogFile)">
@@ -968,21 +1024,21 @@
                         <div v-if="adminTab === 'ip'">
                             <div class="mb-3">
                                 <div class="input-group">
-                                    <input type="text" class="form-control" v-model="blockIpTarget" placeholder="IP Address to Block">
-                                    <input type="text" class="form-control" v-model="blockIpReason" placeholder="Reason (Optional)">
-                                    <button class="btn btn-danger" @click="blockIp">Block IP</button>
+                                    <input type="text" class="form-control" v-model="blockIpTarget" :placeholder="t('ip_to_block')">
+                                    <input type="text" class="form-control" v-model="blockIpReason" :placeholder="t('reason')">
+                                    <button class="btn btn-danger" @click="blockIp">{{ t('block_ip') }}</button>
                                 </div>
                             </div>
                             
-                            <h6 class="fw-bold">Blocked IPs</h6>
+                            <h6 class="fw-bold">{{ t('blocked_ips') }}</h6>
                             <div class="table-responsive">
                                 <table class="table table-sm table-bordered">
                                     <thead>
                                         <tr>
                                             <th>IP</th>
-                                            <th>Reason</th>
-                                            <th>Date</th>
-                                            <th>Action</th>
+                                            <th>{{ t('reason') }}</th>
+                                            <th>{{ t('date') }}</th>
+                                            <th>{{ t('action') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -991,11 +1047,11 @@
                                             <td>{{ b.reason }}</td>
                                             <td>{{ new Date(b.timestamp * 1000).toLocaleString() }}</td>
                                             <td>
-                                                <button class="btn btn-sm btn-outline-success" @click="unblockIp(b.ip)">Unblock</button>
+                                                <button class="btn btn-sm btn-outline-success" @click="unblockIp(b.ip)">{{ t('unblock') }}</button>
                                             </td>
                                         </tr>
                                         <tr v-if="!adminStats.blocked_ips || adminStats.blocked_ips.length === 0">
-                                            <td colspan="4" class="text-center text-muted">No blocked IPs</td>
+                                            <td colspan="4" class="text-center text-muted">{{ t('no_blocked_ips') }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1005,17 +1061,17 @@
                         <!-- User Manager Tab -->
                         <div v-if="adminTab === 'users'">
                             <div class="mb-3">
-                                <button class="btn btn-sm btn-outline-primary" @click="loadAdminUsers()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                                <button class="btn btn-sm btn-outline-primary" @click="loadAdminUsers()"><i class="bi bi-arrow-clockwise"></i> {{ t('refresh') }}</button>
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover align-middle">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Username</th>
+                                            <th>{{ t('username') }}</th>
                                             <th>Role</th>
-                                            <th>Last Seen</th>
+                                            <th>{{ t('last_seen') }}</th>
                                             <th>Device</th>
-                                            <th>Actions</th>
+                                            <th>{{ t('action') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1035,20 +1091,20 @@
                                             <td class="small text-muted">{{ u.device_info || '-' }}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button v-if="u.role === 'pending'" class="btn btn-success" @click="approveUser(u.id)" title="Approve">
+                                                    <button v-if="u.role === 'pending'" class="btn btn-success" @click="approveUser(u.id)" :title="t('approve')">
                                                         <i class="bi bi-check-lg"></i>
                                                     </button>
-                                                    <button class="btn btn-warning text-dark" @click="editUser(u)" title="Edit">
+                                                    <button class="btn btn-warning text-dark" @click="editUser(u)" :title="t('edit')">
                                                         <i class="bi bi-pencil"></i>
                                                     </button>
-                                                    <button class="btn btn-danger" @click="deleteUser(u.id)" :disabled="u.role === 'admin' && u.username === 'admin'" title="Delete">
+                                                    <button class="btn btn-danger" @click="deleteUser(u.id)" :disabled="u.role === 'admin' && u.username === 'admin'" :title="t('delete')">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
                                             </td>
                                         </tr>
                                         <tr v-if="adminUsers.length === 0">
-                                            <td colspan="5" class="text-center text-muted p-4">No users found</td>
+                                            <td colspan="5" class="text-center text-muted p-4">{{ t('no_users') }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1065,12 +1121,12 @@
                                 </div>
                                 <div>
                                     <input type="file" ref="fileUploader" class="d-none" @change="performUpload">
-                                    <button class="btn btn-sm btn-outline-primary" @click="uploadFile"><i class="bi bi-upload"></i> Upload</button>
+                                    <button class="btn btn-sm btn-outline-primary" @click="uploadFile"><i class="bi bi-upload"></i> {{ t('upload') }}</button>
                                 </div>
                             </div>
                             <div class="mb-2 d-flex align-items-center">
                                 <button class="btn btn-sm btn-outline-secondary me-2" @click="loadAdminFiles(getParentPath(adminCurrentPath))" :disabled="!adminCurrentPath">
-                                    <i class="bi bi-arrow-up"></i> Up
+                                    <i class="bi bi-arrow-up"></i> {{ t('up') }}
                                 </button>
                                 <span class="font-monospace small text-muted">{{ adminFileRoot }}:/{{ adminCurrentPath || '' }}</span>
                             </div>
@@ -1078,10 +1134,10 @@
                                 <table class="table table-sm table-hover table-bordered">
                                     <thead class="bg-light sticky-top">
                                         <tr>
-                                            <th>Name</th>
-                                            <th>Size</th>
-                                            <th>Date</th>
-                                            <th>Action</th>
+                                            <th>{{ t('filename') }}</th>
+                                            <th>{{ t('size') }}</th>
+                                            <th>{{ t('date') }}</th>
+                                            <th>{{ t('action') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1096,20 +1152,20 @@
                                             <td class="small">{{ new Date(f.mtime * 1000).toLocaleString() }}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button v-if="!f.is_dir" class="btn btn-primary" @click="editFile(f)" title="Edit">
+                                                    <button v-if="!f.is_dir" class="btn btn-primary" @click="editFile(f)" :title="t('edit')">
                                                         <i class="bi bi-pencil"></i>
                                                     </button>
-                                                    <button class="btn btn-warning text-dark" @click="renameFile(f)" title="Rename">
+                                                    <button class="btn btn-warning text-dark" @click="renameFile(f)" :title="t('rename')">
                                                         <i class="bi bi-input-cursor-text"></i>
                                                     </button>
-                                                    <button class="btn btn-danger" @click="deleteAdminFile(joinPath(adminCurrentPath, f.name))" title="Delete">
+                                                    <button class="btn btn-danger" @click="deleteAdminFile(joinPath(adminCurrentPath, f.name))" :title="t('delete')">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
                                             </td>
                                         </tr>
                                         <tr v-if="adminFiles.length === 0">
-                                            <td colspan="4" class="text-center text-muted">Empty directory</td>
+                                            <td colspan="4" class="text-center text-muted">{{ t('empty_dir') }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1120,7 +1176,7 @@
                     <div class="modal-body text-center" v-else-if="adminError">
                         <div class="text-danger mb-3"><i class="bi bi-exclamation-triangle fs-1"></i></div>
                         <p class="text-danger">{{ adminError }}</p>
-                        <button class="btn btn-sm btn-outline-secondary" @click="openAdminStats">Retry</button>
+                        <button class="btn btn-sm btn-outline-secondary" @click="openAdminStats">{{ t('retry') }}</button>
                     </div>
                     <div class="modal-body text-center" v-else>
                         <div class="spinner-border text-primary" role="status"></div>
@@ -1134,16 +1190,16 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Edit User</h5>
+                        <h5 class="modal-title">{{ t('edit_user') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body" v-if="editingUser">
                         <div class="mb-3">
-                            <label class="form-label">Username (Login)</label>
+                            <label class="form-label">{{ t('username') }}</label>
                             <input type="text" class="form-control" v-model="editingUser.username">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Display Name</label>
+                            <label class="form-label">{{ t('display_name') }}</label>
                             <input type="text" class="form-control" v-model="editingUser.nickname">
                         </div>
                         <div class="mb-3">
@@ -1154,13 +1210,13 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">New Password (Empty to keep)</label>
+                            <label class="form-label">{{ t('new_password') }}</label>
                             <input type="password" class="form-control" v-model="editingUser.password">
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button class="btn btn-primary" @click="saveUser">Save Changes</button>
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">{{ t('cancel') }}</button>
+                        <button class="btn btn-primary" @click="saveUser">{{ t('save_changes') }}</button>
                     </div>
                 </div>
             </div>
@@ -1171,7 +1227,7 @@
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Edit File</h5>
+                        <h5 class="modal-title">{{ t('edit_file') }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body" v-if="editingFile">
@@ -1179,8 +1235,8 @@
                         <textarea class="form-control font-monospace" rows="15" v-model="editingFile.content" style="font-size: 0.9em;"></textarea>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button class="btn btn-primary" @click="saveEditedFile">Save</button>
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">{{ t('close') }}</button>
+                        <button class="btn btn-primary" @click="saveEditedFile">{{ t('save') }}</button>
                     </div>
                 </div>
             </div>
@@ -1193,6 +1249,327 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
         const { createApp } = Vue;
+
+        const i18n = {
+            en: {
+                notification_required_title: "Notification Permission Required",
+                notification_required_msg: "This service cannot be used without notification permission.",
+                allow_notifications: "Allow Notifications",
+                change_password: "Change Password",
+                current_password: "Current Password",
+                new_password_label: "New Password",
+                confirm_password: "Confirm Password",
+                password_mismatch: "Passwords do not match",
+                password_changed: "Password changed successfully",
+                app_title: "Yt-Dlp Manager",
+                manage_servers: "Servers",
+                proxy: "Proxy",
+                admin: "Admin",
+                settings: "Settings",
+                upload_cookies: "Upload Cookies",
+                check_updates: "Check Updates",
+                logout: "Logout",
+                new_download: "New Download",
+                url_placeholder: "Paste video URL or Type search query...",
+                server: "Server",
+                auto_best: "✨ Auto (Best)",
+                type: "Type",
+                video_audio: "🎬 Video + Audio",
+                audio_only: "🎵 Audio Only",
+                quality: "Quality",
+                best_avail: "🌟 Best Available",
+                subtitles: "Subtitles",
+                format: "Format",
+                start_download: "Start Download",
+                starting: "Starting...",
+                active_jobs: "Active Jobs",
+                title: "Title",
+                status: "Status",
+                progress: "Progress",
+                info: "Info",
+                action: "Action",
+                show_older: "Show older jobs...",
+                no_jobs: "No active downloads",
+                library: "Library",
+                selected: "selected",
+                download: "Download",
+                delete: "Delete",
+                filename: "Filename",
+                size: "Size",
+                date: "Date",
+                actions: "Actions",
+                library_empty: "Library is empty",
+                play: "Play",
+                available_offline: "Available Offline",
+                save_offline: "Save Offline",
+                theme: "Theme",
+                language: "Language",
+                default_resolution: "Default Resolution",
+                auto_delete: "Auto-delete Downloads from job list",
+                pwa_storage: "PWA Storage",
+                offline_cache: "Offline Cache",
+                clear_cache: "Clear Cache",
+                saving_offline: "Saving Offline...",
+                dont_close: "Do not close this tab or screen. Background downloading is not supported.",
+                cancel: "Cancel",
+                select_video: "Select Video",
+                searching: "Searching YouTube...",
+                no_results: "No results found",
+                no_image: "No Image",
+                setup: "Setup",
+                stream: "Stream",
+                secure_proxy: "Secure Proxy",
+                proxy_desc: "Browse the web securely through the server's encrypted tunnel.",
+                go: "Go",
+                admin_dashboard: "Admin Dashboard",
+                overview: "Overview",
+                logs: "Logs",
+                ip_manager: "IP Manager",
+                users: "Users",
+                file_manager: "File Manager",
+                active_clients: "Active Clients",
+                total_sessions: "Total Sessions",
+                disk_usage: "Disk Usage",
+                bandwidth: "Bandwidth",
+                system_info: "System Information",
+                top_bandwidth: "Top Bandwidth Users",
+                client_fingerprints: "Client Fingerprints",
+                event_log: "Event Log (DB)",
+                system_logs: "System Logs (Files)",
+                ip_to_block: "IP Address to Block",
+                reason: "Reason",
+                block_ip: "Block IP",
+                blocked_ips: "Blocked IPs",
+                unblock: "Unblock",
+                no_blocked_ips: "No blocked IPs",
+                refresh: "Refresh",
+                username: "Username",
+                role: "Role",
+                last_seen: "Last Seen",
+                device: "Device",
+                approve: "Approve",
+                edit: "Edit",
+                no_users: "No users found",
+                upload: "Upload",
+                up: "Up",
+                empty_dir: "Empty directory",
+                retry: "Retry",
+                edit_user: "Edit User",
+                display_name: "Display Name",
+                new_password: "New Password (Empty to keep)",
+                save_changes: "Save Changes",
+                edit_file: "Edit File",
+                close: "Close",
+                save: "Save",
+                resume: "Resume",
+                rename: "Rename",
+                preview: "Preview",
+                lyrics: "Lyrics",
+                speed: "Speed",
+                pip: "Picture in Picture",
+                loop: "Loop",
+                confirm_save_offline: "Save {filename} for offline viewing? This may take time.",
+                confirm_clear_cache: "Clear all offline videos?",
+                confirm_delete_files_count: "Delete {count} files?",
+                confirm_remove_server: "Remove this server?",
+                confirm_block_ip: "Block IP {ip}?",
+                confirm_unblock_ip: "Unblock IP {ip}?",
+                confirm_approve_user: "Approve user?",
+                confirm_delete_user: "Delete user?",
+                confirm_delete_path: "Delete {path}?",
+                confirm_update_all: "Update ALL connected servers?",
+                confirm_delete_filename: "Delete {filename}?",
+                alert_offline_save_failed: "Offline save failed: ",
+                alert_cache_cleared: "Cache cleared",
+                alert_bulk_delete_failed: "Bulk delete failed: ",
+                alert_bulk_download_failed: "Bulk download failed: ",
+                alert_clipboard_failed: "Failed to read clipboard: ",
+                alert_log_load_failed: "Failed to load log content: ",
+                alert_delete_failed: "Delete failed: ",
+                alert_search_failed: "Search failed: ",
+                alert_system_error_ui: "System Error: UI Framework not loaded.",
+                alert_server_exists: "Server already exists",
+                alert_connect_failed: "Could not connect to server: ",
+                alert_logout_failed: "Logout failed",
+                alert_block_ip_failed: "Failed to block IP: ",
+                alert_unblock_ip_failed: "Failed to unblock IP: ",
+                alert_update_failed: "Update failed: ",
+                alert_load_users_failed: "Failed to load users: ",
+                alert_approve_failed: "Failed to approve user: ",
+                alert_upload_failed: "Upload failed: ",
+                alert_rename_failed: "Rename failed: ",
+                alert_edit_binary_error: "Cannot edit this file (maybe binary?)",
+                alert_saved: "Saved",
+                alert_save_failed: "Save failed: ",
+                alert_popup_blocked: "Popup blocked! Please allow popups for this site.",
+                alert_proxy_error: "Proxy Error: ",
+                alert_download_start_error: "Error starting download: ",
+                alert_delete_file_error: "Error deleting file: ",
+                alert_cookies_uploaded: "Cookies uploaded to {count} servers.",
+                alert_cookie_upload_failed: "Cookie upload failed.",
+                alert_update_sent: "Update command sent.",
+                prompt_new_name: "New Name:"
+            },
+            ja: {
+                notification_required_title: "通知許可が必要です",
+                notification_required_msg: "通知を許可しないとこのサービスは利用できません。",
+                allow_notifications: "通知を許可する",
+                change_password: "パスワード変更",
+                current_password: "現在のパスワード",
+                new_password_label: "新しいパスワード",
+                confirm_password: "パスワード確認",
+                password_mismatch: "パスワードが一致しません",
+                password_changed: "パスワードを変更しました",
+                app_title: "Yt-Dlp マネージャー",
+                manage_servers: "サーバー管理",
+                proxy: "プロキシ",
+                admin: "管理",
+                settings: "設定",
+                upload_cookies: "クッキーアップロード",
+                check_updates: "更新を確認",
+                logout: "ログアウト",
+                new_download: "新規ダウンロード",
+                url_placeholder: "動画URLまたは検索ワードを入力...",
+                server: "サーバー",
+                auto_best: "✨ 自動 (最適)",
+                type: "種類",
+                video_audio: "🎬 動画 + 音声",
+                audio_only: "🎵 音声のみ",
+                quality: "画質",
+                best_avail: "🌟 最高画質",
+                subtitles: "字幕",
+                format: "フォーマット",
+                start_download: "ダウンロード開始",
+                starting: "開始中...",
+                active_jobs: "実行中のジョブ",
+                title: "タイトル",
+                status: "状態",
+                progress: "進捗",
+                info: "情報",
+                action: "操作",
+                show_older: "古いジョブを表示...",
+                no_jobs: "アクティブなダウンロードはありません",
+                library: "ライブラリ",
+                selected: "選択中",
+                download: "ダウンロード",
+                delete: "削除",
+                filename: "ファイル名",
+                size: "サイズ",
+                date: "日時",
+                actions: "操作",
+                library_empty: "ライブラリは空です",
+                play: "再生",
+                available_offline: "オフライン利用可能",
+                save_offline: "オフライン保存",
+                theme: "テーマ",
+                language: "言語",
+                default_resolution: "デフォルト解像度",
+                auto_delete: "完了したジョブを自動削除",
+                pwa_storage: "PWAストレージ",
+                offline_cache: "オフラインキャッシュ",
+                clear_cache: "キャッシュ削除",
+                saving_offline: "オフライン保存中...",
+                dont_close: "タブや画面を閉じないでください。バックグラウンド保存には対応していません。",
+                cancel: "キャンセル",
+                select_video: "動画の選択",
+                searching: "YouTubeを検索中...",
+                no_results: "結果が見つかりませんでした",
+                no_image: "画像なし",
+                setup: "設定",
+                stream: "ストリーム",
+                secure_proxy: "セキュアプロキシ",
+                proxy_desc: "サーバーの暗号化トンネルを経由して安全にブラウジングします。",
+                go: "移動",
+                admin_dashboard: "管理ダッシュボード",
+                overview: "概要",
+                logs: "ログ",
+                ip_manager: "IP管理",
+                users: "ユーザー",
+                file_manager: "ファイル管理",
+                active_clients: "アクティブ数",
+                total_sessions: "総セッション",
+                disk_usage: "ディスク使用量",
+                bandwidth: "帯域幅",
+                system_info: "システム情報",
+                top_bandwidth: "帯域使用トップ",
+                client_fingerprints: "クライアント情報",
+                event_log: "イベントログ (DB)",
+                system_logs: "システムログ (Files)",
+                ip_to_block: "ブロックするIPアドレス",
+                reason: "理由",
+                block_ip: "IPをブロック",
+                blocked_ips: "ブロック済みIP",
+                unblock: "解除",
+                no_blocked_ips: "ブロックされたIPはありません",
+                refresh: "更新",
+                username: "ユーザー名",
+                role: "権限",
+                last_seen: "最終アクセス",
+                device: "端末",
+                approve: "承認",
+                edit: "編集",
+                no_users: "ユーザーが見つかりません",
+                upload: "アップロード",
+                up: "上へ",
+                empty_dir: "空のディレクトリ",
+                retry: "再試行",
+                edit_user: "ユーザー編集",
+                display_name: "表示名",
+                new_password: "新しいパスワード (変更しない場合は空欄)",
+                save_changes: "変更を保存",
+                edit_file: "ファイル編集",
+                close: "閉じる",
+                save: "保存",
+                resume: "再開",
+                rename: "名前変更",
+                preview: "プレビュー",
+                lyrics: "歌詞",
+                speed: "速度",
+                pip: "PIP",
+                loop: "ループ",
+                confirm_save_offline: "{filename} をオフライン保存しますか？時間がかかる場合があります。",
+                confirm_clear_cache: "オフラインビデオをすべて消去しますか？",
+                confirm_delete_files_count: "{count} 個のファイルを削除しますか？",
+                confirm_remove_server: "このサーバーを削除しますか？",
+                confirm_block_ip: "IP {ip} をブロックしますか？",
+                confirm_unblock_ip: "IP {ip} のブロックを解除しますか？",
+                confirm_approve_user: "ユーザーを承認しますか？",
+                confirm_delete_user: "ユーザーを削除しますか？",
+                confirm_delete_path: "{path} を削除しますか？",
+                confirm_update_all: "接続されているすべてのサーバーを更新しますか？",
+                confirm_delete_filename: "{filename} を削除しますか？",
+                alert_offline_save_failed: "オフライン保存に失敗しました: ",
+                alert_cache_cleared: "キャッシュを消去しました",
+                alert_bulk_delete_failed: "一括削除に失敗しました: ",
+                alert_bulk_download_failed: "一括ダウンロードに失敗しました: ",
+                alert_clipboard_failed: "クリップボードの読み取りに失敗しました: ",
+                alert_log_load_failed: "ログの読み込みに失敗しました: ",
+                alert_delete_failed: "削除に失敗しました: ",
+                alert_search_failed: "検索に失敗しました: ",
+                alert_system_error_ui: "システムエラー: UIフレームワークがロードされていません。",
+                alert_server_exists: "サーバーは既に存在します",
+                alert_connect_failed: "サーバーに接続できませんでした: ",
+                alert_logout_failed: "ログアウトに失敗しました",
+                alert_block_ip_failed: "IPのブロックに失敗しました: ",
+                alert_unblock_ip_failed: "IPのブロック解除に失敗しました: ",
+                alert_update_failed: "更新に失敗しました: ",
+                alert_load_users_failed: "ユーザーの読み込みに失敗しました: ",
+                alert_approve_failed: "ユーザーの承認に失敗しました: ",
+                alert_upload_failed: "アップロードに失敗しました: ",
+                alert_rename_failed: "名前の変更に失敗しました: ",
+                alert_edit_binary_error: "このファイルは編集できません（バイナリの可能性があります）",
+                alert_saved: "保存しました",
+                alert_save_failed: "保存に失敗しました: ",
+                alert_popup_blocked: "ポップアップがブロックされました！このサイトのポップアップを許可してください。",
+                alert_proxy_error: "プロキシエラー: ",
+                alert_download_start_error: "ダウンロード開始エラー: ",
+                alert_delete_file_error: "ファイルの削除エラー: ",
+                alert_cookies_uploaded: "{count} 台のサーバーにクッキーをアップロードしました。",
+                alert_cookie_upload_failed: "クッキーのアップロードに失敗しました。",
+                alert_update_sent: "更新コマンドを送信しました。",
+                prompt_new_name: "新しい名前:"
+            }
+        };
 
         createApp({
             data() {
@@ -1243,6 +1620,9 @@
                     logContent: '',
                     logSearchQuery: '',
                     currentLogFile: '',
+                    offlineSpeed: '',
+                    offlineEta: '',
+                    abortController: null,
                     
                     // Search
                     searchResults: [],
@@ -1253,19 +1633,25 @@
                     showAllJobs: false,
                     isPWA: window.matchMedia('(display-mode: standalone)').matches || ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')),
                     currentSubtitles: [],
+                    currentLyrics: '',
                     playbackRate: 1.0,
                     isLooping: false,
                     offlineProgress: 0,
                     
                     settings: {
                         theme: 'light',
+                        lang: 'ja',
                         defaultQuality: '720',
                         autoDeleteFinished: false
                     },
                     
                     // Edit State
                     editingUser: null,
-                    editingFile: null
+                    editingFile: null,
+                    notificationDenied: false,
+                    
+                    // Password Change
+                    pwdForm: { current: '', new: '', confirm: '' }
                 }
             },
             computed: {
@@ -1289,10 +1675,65 @@
                 }
             },
             methods: {
+                checkNotification() {
+                    if (!("Notification" in window)) {
+                        this.notificationDenied = true;
+                    } else if (Notification.permission === "granted") {
+                        this.notificationDenied = false;
+                    } else if (Notification.permission === "denied") {
+                        this.notificationDenied = true;
+                    } else {
+                        this.requestNotification();
+                    }
+                },
+                async requestNotification() {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        this.notificationDenied = false;
+                        new Notification("Yt-Dlp Manager", { body: "Notifications enabled!" });
+                    } else {
+                        this.notificationDenied = true;
+                    }
+                },
+                sendNotification(title, body) {
+                     if (Notification.permission === 'granted') {
+                         new Notification(title, { body: body, icon: '/static/icon-192.png' });
+                     }
+                },
+                
+                async submitChangePassword() {
+                    if (this.pwdForm.new !== this.pwdForm.confirm) {
+                        alert(this.t('password_mismatch'));
+                        return;
+                    }
+                    try {
+                        await axios.post('/api/user/password', {
+                            current_password: this.pwdForm.current,
+                            new_password: this.pwdForm.new
+                        });
+                        alert(this.t('password_changed'));
+                        this.pwdForm = { current: '', new: '', confirm: '' };
+                    } catch (e) {
+                         alert(this.t('alert_update_failed') + (e.response?.data?.detail || e.message));
+                    }
+                },
+
+                t(key, args = {}) {
+                    const lang = this.settings.lang || 'ja';
+                    let text = i18n[lang][key] || key;
+                    if (args) {
+                        for (const k in args) {
+                            text = text.replace(`{${k}}`, args[k]);
+                        }
+                    }
+                    return text;
+                },
                 // --- Settings ---
                 loadSettings() {
                     const s = localStorage.getItem('ytdlp_settings');
                     if (s) {
+                         this.settings = JSON.parse(s);
+                         if (!this.settings.lang) this.settings.lang = 'ja'; // Default to ja if missing
                          this.settings = JSON.parse(s);
                          this.form.quality = this.settings.defaultQuality || '720';
                          this.theme = this.settings.theme;
@@ -1322,7 +1763,7 @@
                     }
                 },
                 async saveOffline(file) {
-                    if (!confirm(`Save ${file.filename} for offline viewing? This may take time.`)) return;
+                    if (!confirm(this.t('confirm_save_offline', { filename: file.filename }))) return;
                     file.saving = true;
                     this.offlineProgress = 1;
                     try {
@@ -1339,29 +1780,62 @@
                         
                         // Store in Cache
                         const cache = await caches.open('ytdlp-media-v1');
+                        
+                        this.abortController = new AbortController();
+                        const startTime = Date.now();
+                        
+                        const response = await axios.get(url, {
+                            responseType: 'blob',
+                            signal: this.abortController.signal,
+                            onDownloadProgress: (progressEvent) => {
+                                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                                this.offlineProgress = percentCompleted;
+                                
+                                // Calculate Speed & ETA
+                                const elapsedTime = (Date.now() - startTime) / 1000; // seconds
+                                if (elapsedTime > 0) {
+                                    const speed = progressEvent.loaded / elapsedTime; // bytes/sec
+                                    this.offlineSpeed = this.formatSize(speed) + '/s';
+                                    
+                                    const remainingBytes = progressEvent.total - progressEvent.loaded;
+                                    const remainingTime = remainingBytes / speed;
+                                    this.offlineEta = Math.ceil(remainingTime) + 's';
+                                }
+                            }
+                        });
+                        
                         // We need to construct a Response object to put in cache
-                        // Or just use cache.put with the request/response
-                        // Since we have the blob, we can create a response
                         const cacheResp = new Response(response.data, {
                             headers: { 'Content-Type': response.headers['content-type'] }
                         });
                         await cache.put(url, cacheResp);
                         
                         file.isOffline = true;
-                        // alert('Saved for offline!'); // Removing alert for smoother UX
                     } catch (e) {
-                         alert('Offline save failed: ' + e.message);
+                         if (axios.isCancel(e)) {
+                             console.log('Download canceled');
+                         } else {
+                             alert(this.t('alert_offline_save_failed') + e.message);
+                         }
                     } finally {
                         file.saving = false;
                         this.offlineProgress = 0;
+                        this.offlineSpeed = '';
+                        this.offlineEta = '';
+                        this.abortController = null;
+                    }
+                },
+                cancelOfflineSave() {
+                    if (this.abortController) {
+                        this.abortController.abort();
                     }
                 },
                 async clearOfflineCache() {
-                    if (!confirm('Clear all offline videos?')) return;
+                    if (!confirm(this.t('confirm_clear_cache'))) return;
                     if ('caches' in window) {
                         await caches.delete('ytdlp-media-v1');
                         this.files.forEach(f => f.isOffline = false);
-                        alert('Cache cleared');
+                        alert(this.t('alert_cache_cleared'));
                     }
                 },
                 
@@ -1393,7 +1867,7 @@
                 },
                 async deleteSelectedFiles() {
                     if (this.selectedFiles.length === 0) return;
-                    if (!confirm(`Delete ${this.selectedFiles.length} files?`)) return;
+                    if (!confirm(this.t('confirm_delete_files_count', { count: this.selectedFiles.length }))) return;
                     
                     try {
                         const res = await axios.post('/api/files/bulk_delete', { filenames: this.selectedFiles });
@@ -1406,7 +1880,7 @@
                         this.selectedFiles = [];
                         this.fetchAllData();
                     } catch (e) {
-                         alert("Bulk delete failed: " + e.message);
+                         alert(this.t('alert_bulk_delete_failed') + e.message);
                     }
                 },
                 async downloadSelectedFiles() {
@@ -1437,7 +1911,7 @@
                          link.click();
                          document.body.removeChild(link);
                      } catch (e) {
-                         alert("Bulk download failed: " + e.message);
+                         alert(this.t('alert_bulk_download_failed') + e.message);
                      } finally {
                          this.loading = false;
                      }
@@ -1457,15 +1931,17 @@
                         const text = await navigator.clipboard.readText();
                         if (text) this.form.url = text;
                     } catch (e) {
-                         alert("Failed to read clipboard: " + e.message);
+                         alert(this.t('alert_clipboard_failed') + e.message);
                     }
                 },
                 streamSearchVideo(res) {
-                    this.currentVideoUrl = '/api/stream?url=' + encodeURIComponent(res.url);
+                    this.currentLyrics = '';
                     const modal = this.getModal('videoModal');
                     if (modal) {
                         modal.show();
                         this.$nextTick(() => {
+                            if (this.$refs.videoPlayer) {
+                                this.setupMediaSession(res.title, res.uploader, res.thumbnails);
                             if (this.$refs.videoPlayer) {
                                 this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
                             }
@@ -1490,17 +1966,17 @@
                         const res = await axios.get('/api/admin/logs/content', { params: { file: filename, lines: 2000 } });
                         this.logContent = res.data.content;
                     } catch (e) {
-                         alert("Failed to load log content: " + e.message);
+                         alert(this.t('alert_log_load_failed') + e.message);
                     }
                 },
                 async deleteLogFile(filename) {
-                    if (!confirm(`Delete ${filename}?`)) return;
+                    if (!confirm(this.t('confirm_delete_filename', { filename: filename }))) return;
                     try {
                         await axios.delete('/api/admin/logs', { params: { file: filename } });
                         this.loadLogFiles();
                         this.logContent = '';
                     } catch (e) {
-                        alert("Delete failed: " + e.message);
+                        alert(this.t('alert_delete_failed') + e.message);
                     }
                 },
                 async searchLogs() {
@@ -1514,7 +1990,7 @@
                         });
                         this.logContent = out;
                     } catch (e) {
-                        alert("Search failed: " + e.message);
+                        alert(this.t('alert_search_failed') + e.message);
                     }
                 },
 
@@ -1527,7 +2003,7 @@
                 getModal(refName) {
                     if (typeof bootstrap === 'undefined') {
                         console.error("Bootstrap is not loaded!");
-                        alert("System Error: UI Framework not loaded.");
+                        alert(this.t('alert_system_error_ui'));
                         return null;
                     }
                     const el = this.$refs[refName];
@@ -1561,7 +2037,7 @@
                     if (url.endsWith('/')) url = url.slice(0, -1);
                     
                     if (this.servers.find(s => s.url === url)) {
-                        alert('Server already exists');
+                        alert(this.t('alert_server_exists'));
                         return;
                     }
 
@@ -1577,11 +2053,11 @@
                         this.newServerUrl = '';
                         this.fetchAllData();
                     } catch (e) {
-                        alert('Could not connect to server: ' + e.message);
+                        alert(this.t('alert_connect_failed') + e.message);
                     }
                 },
                 removeServer(index) {
-                    if (confirm('Remove this server?')) {
+                    if (confirm(this.t('confirm_remove_server'))) {
                         this.servers.splice(index, 1);
                         this.saveServers();
                         this.fetchAllData();
@@ -1602,7 +2078,7 @@
                         await axios.post('/api/logout');
                         window.location.href = '/static/login.html';
                     } catch (e) {
-                        alert('Logout failed');
+                        alert(this.t('alert_logout_failed'));
                     }
                 },
                 async openAdminStats() {
@@ -1620,7 +2096,7 @@
                 },
                 async blockIp() {
                     if (!this.blockIpTarget) return;
-                    if (!confirm(`Block IP ${this.blockIpTarget}?`)) return;
+                    if (!confirm(this.t('confirm_block_ip', { ip: this.blockIpTarget }))) return;
                     try {
                         await axios.post('/api/admin/block_ip', {
                             ip: this.blockIpTarget,
@@ -1632,18 +2108,18 @@
                         const res = await axios.get('/api/admin/stats');
                         this.adminStats = res.data;
                     } catch (e) {
-                        alert('Failed to block IP: ' + (e.response?.data?.detail || e.message));
+                        alert(this.t('alert_block_ip_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
                 async unblockIp(ip) {
-                    if (!confirm(`Unblock IP ${ip}?`)) return;
+                    if (!confirm(this.t('confirm_unblock_ip', { ip: ip }))) return;
                     try {
                         await axios.post('/api/admin/unblock_ip', { ip: ip });
                         // Refresh stats
                         const res = await axios.get('/api/admin/stats');
                         this.adminStats = res.data;
                     } catch (e) {
-                        alert('Failed to unblock IP: ' + (e.response?.data?.detail || e.message));
+                        alert(this.t('alert_unblock_ip_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
                 
@@ -1666,7 +2142,7 @@
                         bootstrap.Modal.getInstance(document.getElementById('userEditModal')).hide();
                         this.loadAdminUsers();
                     } catch (e) {
-                        alert("Update failed: " + (e.response?.data?.detail || e.message));
+                        alert(this.t('alert_update_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
                 async loadAdminUsers() {
@@ -1675,25 +2151,25 @@
                         const res = await axios.get('/api/admin/users');
                         this.adminUsers = res.data;
                     } catch (e) {
-                         alert('Failed to load users: ' + (e.response?.data?.detail || e.message));
+                         alert(this.t('alert_load_users_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
                 async approveUser(id) {
-                    if (!confirm(`Approve user?`)) return;
+                    if (!confirm(this.t('confirm_approve_user'))) return;
                     try {
                         await axios.post(`/api/admin/users/${id}/approve`);
                         this.loadAdminUsers();
                     } catch (e) {
-                        alert('Failed to approve user: ' + (e.response?.data?.detail || e.message));
+                        alert(this.t('alert_approve_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
                 async deleteUser(id) {
-                    if (!confirm(`Delete user?`)) return;
+                    if (!confirm(this.t('confirm_delete_user'))) return;
                     try {
                          await axios.delete(`/api/admin/users/${id}`);
                          this.loadAdminUsers();
                     } catch (e) {
-                        alert('Failed to delete user: ' + (e.response?.data?.detail || e.message));
+                        alert(this.t('alert_delete_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
 
@@ -1714,12 +2190,12 @@
                          });
                          this.loadAdminFiles(this.adminCurrentPath);
                     } catch (e) {
-                        alert('Upload failed: ' + e.message);
+                        alert(this.t('alert_upload_failed') + e.message);
                     }
                     event.target.value = '';
                 },
                 async renameFile(file) {
-                    const newName = prompt("New Name:", file.name);
+                    const newName = prompt(this.t('prompt_new_name'), file.name);
                     if (!newName || newName === file.name) return;
                     try {
                         await axios.post('/api/admin/files/rename', {
@@ -1729,7 +2205,7 @@
                         });
                         this.loadAdminFiles(this.adminCurrentPath);
                     } catch (e) {
-                        alert('Rename failed: ' + e.message);
+                        alert(this.t('alert_rename_failed') + e.message);
                     }
                 },
                 async editFile(file) {
@@ -1746,7 +2222,7 @@
                          const modal = new bootstrap.Modal(document.getElementById('editorModal'));
                          modal.show();
                     } catch (e) {
-                         alert("Cannot edit this file (maybe binary?)");
+                         alert(this.t('alert_edit_binary_error'));
                     }
                 },
                 async saveEditedFile() {
@@ -1757,9 +2233,9 @@
                             root: this.adminFileRoot
                         });
                         bootstrap.Modal.getInstance(document.getElementById('editorModal')).hide();
-                        alert("Saved");
+                        alert(this.t('alert_saved'));
                     } catch (e) {
-                        alert("Save failed: " + e.message);
+                        alert(this.t('alert_save_failed') + e.message);
                     }
                 },
                 async changeAdminRoot(root) {
@@ -1777,12 +2253,12 @@
                     }
                 },
                 async deleteAdminFile(path) {
-                    if (!confirm(`Delete ${path}?`)) return;
+                    if (!confirm(this.t('confirm_delete_path', { path: path }))) return;
                     try {
                         await axios.delete('/api/admin/files', { params: { path: path, root: this.adminFileRoot } });
                         this.loadAdminFiles(this.adminCurrentPath);
                     } catch (e) {
-                        alert('Failed to delete: ' + (e.response?.data?.detail || e.message));
+                        alert(this.t('alert_delete_failed') + (e.response?.data?.detail || e.message));
                     }
                 },
                 downloadAdminFile(path) {
@@ -1815,7 +2291,7 @@
                     const newWindow = window.open('about:blank', targetName);
                     
                     if (!newWindow) {
-                        alert('Popup blocked! Please allow popups for this site.');
+                        alert(this.t('alert_popup_blocked'));
                         return;
                     }
                     
@@ -1847,7 +2323,7 @@
                     } catch (e) {
                         newWindow.close();
                         const msg = e.response?.data?.detail || e.message;
-                        alert('Proxy Error: ' + msg);
+                        alert(this.t('alert_proxy_error') + msg);
                         console.error("Proxy Error:", e);
                     }
                 },
@@ -1928,7 +2404,7 @@
                             const res = await axios.get('/api/search', { params: { q: input } });
                             this.searchResults = res.data;
                         } catch (e) {
-                            alert("Search failed: " + (e.response?.data?.detail || e.message));
+                            alert(this.t('alert_search_failed') + (e.response?.data?.detail || e.message));
                         } finally {
                             this.isSearching = false;
                         }
@@ -1951,7 +2427,7 @@
                         this.form.url = ''; 
                         this.fetchAllData();
                     } catch (error) {
-                        alert('Error starting download: ' + (error.response?.data?.detail || error.message));
+                        alert(this.t('alert_download_start_error') + (error.response?.data?.detail || error.message));
                     } finally {
                         this.loading = false;
                     }
@@ -1965,6 +2441,11 @@
                     // this.startDownload();
                 },
                 
+                isAudio(filename) {
+                    const ext = filename.split('.').pop().toLowerCase();
+                    return ['mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg'].includes(ext);
+                },
+
                 formatDuration(seconds) {
                     if (!seconds) return '--:--';
                     const h = Math.floor(seconds / 3600);
@@ -1984,13 +2465,13 @@
                     }
                 },
                 async deleteFile(file) {
-                    if(!confirm('Delete ' + file.filename + '?')) return;
+                    if (!confirm(this.t('confirm_delete_filename', { filename: file.filename }))) return;
                     try {
                         const baseUrl = file.serverUrl === '/' ? '' : file.serverUrl;
                         await axios.delete(`${baseUrl}/files/${encodeURIComponent(file.filename)}`);
                         this.fetchAllData();
                     } catch (error) {
-                        alert('Error deleting file: ' + (error.response?.data?.detail || error.message));
+                        alert(this.t('alert_delete_file_error') + (error.response?.data?.detail || error.message));
                     }
                 },
 
@@ -2011,16 +2492,16 @@
                                 });
                             });
                         await Promise.all(promises);
-                        alert(`Cookies uploaded to ${promises.length} servers.`);
+                        alert(this.t('alert_cookies_uploaded', { count: promises.length }));
                     } catch (error) {
-                        alert('Cookie upload failed.');
+                        alert(this.t('alert_cookie_upload_failed'));
                     } finally {
                         this.uploadingCookies = false;
                         event.target.value = '';
                     }
                 },
                 async updateSystem() {
-                    if (!confirm('Update ALL connected servers?')) return;
+                    if (!confirm(this.t('confirm_update_all'))) return;
                     this.updating = true;
                     try {
                         const promises = this.servers
@@ -2030,9 +2511,9 @@
                                 return axios.post(`${baseUrl}/system/update`).catch(e => console.error(e));
                             });
                         await Promise.all(promises);
-                        alert('Update command sent.');
+                        alert(this.t('alert_update_sent'));
                     } catch (error) {
-                        alert('Update failed');
+                        alert(this.t('alert_update_failed').replace(': ', ''));
                     } finally {
                         this.updating = false;
                     }
@@ -2066,14 +2547,59 @@
                 },
                 formatDate(timestamp) {
                     return new Date(timestamp * 1000).toLocaleString();
+                
+                setupMediaSession(title, artist = 'Yt-Dlp Server', artwork = null) {
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: title,
+                            artist: artist,
+                            album: 'Downloads',
+                            artwork: artwork || [
+                                { src: '/static/icon-192.png', sizes: '192x192', type: 'image/png' },
+                                { src: '/static/icon-512.png', sizes: '512x512', type: 'image/png' }
+                            ]
+                        });
+
+                        navigator.mediaSession.setActionHandler('play', () => this.$refs.videoPlayer.play());
+                        navigator.mediaSession.setActionHandler('pause', () => this.$refs.videoPlayer.pause());
+                        navigator.mediaSession.setActionHandler('seekbackward', () => this.$refs.videoPlayer.currentTime -= 10);
+                        navigator.mediaSession.setActionHandler('seekforward', () => this.$refs.videoPlayer.currentTime += 10);
+                        navigator.mediaSession.setActionHandler('previoustrack', null);
+                        navigator.mediaSession.setActionHandler('nexttrack', null);
+                    }
                 },
-                playVideo(file) {
+
+                handleVideoError(e) {
+                    console.error("Video Error:", e);
+                    // alert("Playback Error. The format might not be supported or the stream is invalid.");
+                },
+
+                async playVideo(file) {
                     this.currentVideoUrl = this.getDownloadUrl(file);
+                    this.currentLyrics = '';
+                    
+                    // Try to find lyrics file (lrc)
+                    const baseName = file.filename.substring(0, file.filename.lastIndexOf('.'));
+                    // Check if we have a matching lrc file in our list
+                    const lrcFile = this.files.find(f => f.filename === baseName + '.lrc' || f.filename === baseName + '.srv');
+                    
+                    if (lrcFile) {
+                        try {
+                            const baseUrl = file.serverUrl === '/' ? '' : file.serverUrl;
+                            const res = await axios.get(`${baseUrl}/downloads/${encodeURIComponent(lrcFile.filename)}`);
+                            this.currentLyrics = res.data;
+                        } catch (e) {
+                            console.log("Could not load lyrics");
+                        }
+                    }
+
                     const modal = this.getModal('videoModal');
                     if (modal) {
                         modal.show();
                         // Auto-play
                         this.$nextTick(() => {
+                            if (this.$refs.videoPlayer) {
+                                this.setupMediaSession(file.filename);
                             if (this.$refs.videoPlayer) {
                                 this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
                             }
@@ -2082,6 +2608,7 @@
                 }
             },
             mounted() {
+                this.checkNotification();
                 // Initialize Settings
                 this.loadSettings();
 

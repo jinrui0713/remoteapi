@@ -66,6 +66,13 @@ def init_db():
         created_at REAL,
         last_login REAL
     )''')
+    
+    # File Owners Table
+    c.execute('''CREATE TABLE IF NOT EXISTS file_owners (
+        filename TEXT PRIMARY KEY,
+        username TEXT,
+        created_at REAL
+    )''')
 
     # Initialize Default Users if Empty
     try:
@@ -193,6 +200,21 @@ def update_user(user_id: int, password: str = None, role: str = None, username: 
         c.execute("UPDATE users SET nickname = ? WHERE id = ?", (nickname, user_id))
     conn.commit()
     conn.close()
+
+def update_user_password(username: str, password: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET password = ? WHERE username = ?", (password, username))
+    conn.commit()
+    conn.close()
+
+def get_pending_users_count() -> int:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT count(*) FROM users WHERE role = 'pending'")
+    count = c.fetchone()[0]
+    conn.close()
+    return count
 
 def delete_user(user_id: int):
     conn = sqlite3.connect(DB_PATH)
@@ -363,3 +385,37 @@ def get_bandwidth_stats() -> Dict:
         "total_received": total_recv or 0,
         "top_ips": top_ips
     }
+
+def add_file_owner(filename: str, username: str):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO file_owners (filename, username, created_at) VALUES (?, ?, ?)",
+                  (filename, username, time.time()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"DB Error (Add File Owner): {e}")
+
+def get_file_owners() -> Dict[str, str]:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT filename, username FROM file_owners")
+        rows = c.fetchall()
+        conn.close()
+        return {row[0]: row[1] for row in rows}
+    except Exception as e:
+        print(f"DB Error (Get File Owners): {e}")
+        return {}
+
+def check_username_exists(username: str) -> bool:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM users WHERE username = ?", (username,))
+        row = c.fetchone()
+        conn.close()
+        return row is not None
+    except:
+        return False

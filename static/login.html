@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - YtDlp Server</title>
+    <title>ログイン - YtDlp Server</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-dark d-flex align-items-center justify-content-center" style="height: 100vh;">
+    <!-- Notification Permission Overlay -->
+    <div id="notifOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;">
+        <div class="text-center p-4">
+            <h3 class="mb-3">通知の許可が必要です</h3>
+            <p>このサービスを利用するには通知の許可が必要です。<br>通知を許可しないと利用できません。</p>
+            <button id="btnAllowNotif" class="btn btn-primary btn-lg mt-3">通知を許可する</button>
+        </div>
+    </div>
+
     <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
         <ul class="nav nav-tabs mb-3" id="authTabs">
             <li class="nav-item">
-                <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login-pane" type="button">Login</button>
+                <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login-pane" type="button">ログイン</button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register-pane" type="button">Register</button>
+                <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register-pane" type="button">登録</button>
             </li>
         </ul>
         
@@ -22,14 +31,17 @@
             <div class="tab-pane fade show active" id="login-pane">
                 <form id="loginForm">
                     <div class="mb-3">
-                        <label class="form-label">Username</label>
+                        <label class="form-label">ユーザー名</label>
                         <input type="text" class="form-control" id="username" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
+                        <label class="form-label">パスワード</label>
                         <input type="password" class="form-control" id="password" required>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                    <div class="mb-3">
+                         <small class="text-danger">パスワードを忘れた場合は管理者にご連絡ください。</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">ログイン</button>
                 </form>
             </div>
             
@@ -37,15 +49,16 @@
             <div class="tab-pane fade" id="register-pane">
                 <form id="registerForm">
                     <div class="mb-3">
-                        <label class="form-label">Desired Nickname (Username)</label>
+                        <label class="form-label">希望するニックネーム (ユーザー名)</label>
                         <input type="text" class="form-control" id="reg-nickname" required minlength="3">
-                        <small class="text-muted">Will be used for approval.</small>
+                        <small class="text-muted">承認に使用されます。</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" class="form-control" id="reg-password" required minlength="4">
+                        <label class="form-label">パスワード</label>
+                        <input type="password" class="form-control" id="reg-password" required minlength="4" maxlength="20" pattern="[A-Za-z0-9]+" title="4〜20文字の英数字">
+                        <small class="text-muted">4文字以上20文字以下の英数字</small>
                     </div>
-                    <button type="submit" class="btn btn-success w-100">Request Access</button>
+                    <button type="submit" class="btn btn-success w-100">登録リクエスト</button>
                 </form>
             </div>
         </div>
@@ -53,6 +66,34 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Check Notification Permission on Load
+        document.addEventListener('DOMContentLoaded', () => {
+            const overlay = document.getElementById('notifOverlay');
+            
+            function checkPermission() {
+                if (Notification.permission === 'granted') {
+                    overlay.style.display = 'none';
+                } else {
+                    overlay.style.display = 'flex';
+                    // If denied, maybe show stronger message?
+                    if (Notification.permission === 'denied') {
+                        document.querySelector('#notifOverlay p').innerHTML = '<span class="text-danger fw-bold">通知がブロックされています。ブラウザの設定から通知を許可してください。</span><br>許可しないとこのサービスは利用できません。';
+                    }
+                }
+            }
+
+            document.getElementById('btnAllowNotif').addEventListener('click', () => {
+                Notification.requestPermission().then(permission => {
+                    checkPermission();
+                    if (permission === 'denied') {
+                        alert('通知を許可しないとこのサービスは利用できません。');
+                    }
+                });
+            });
+
+            checkPermission();
+        });
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = document.getElementById('username').value;
@@ -69,10 +110,10 @@
                     window.location.href = '/';
                 } else {
                     const data = await res.json().catch(() => ({}));
-                    alert(data.detail || 'Invalid Credentials');
+                    alert(data.detail || '認証に失敗しました');
                 }
             } catch (e) {
-                alert('Login failed');
+                alert('ログインエラー');
             }
         });
 
@@ -97,14 +138,18 @@
                 
                 const data = await res.json();
                 if (res.ok) {
-                    alert('Registration Requested! Please wait for admin approval.');
+                    alert('登録リクエスト送信完了！管理者の承認をお待ちください。');
                     // Switch to login tab
                     document.getElementById('login-tab').click();
                 } else {
-                    alert(data.detail || 'Registration failed');
+                    if (data.detail === 'Username already taken') {
+                        alert('このユーザー名は既に使用されています。ログインするか、別の名前を使用してください。');
+                    } else {
+                        alert(data.detail || '登録失敗');
+                    }
                 }
             } catch (e) {
-                alert('Request failed');
+                alert('リクエストエラー');
             }
         });
     </script>

@@ -131,8 +131,73 @@ USERS = {
 }
 
 # Session Store (Simple in-memory)
-# Token -> {exp: timestamp, ip: str, ua_hash: str, role: str}
+# Token -> {exp: timestamp, ip: str, ua_hash: str, role: str, username: str}
 sessions: Dict[str, Dict] = {}
+
+# Rate Limiting & Limits
+# user_usage = { username: { 'download': [timestamps], 'proxy': [timestamps] } }
+user_usage: Dict[str, Dict[str, List[float]]] = {}
+
+LIMITS = {
+    'user': { # Shared account
+        'download_limit': 1, # per hour
+        'proxy_limit': 0,    # per hour (disabled)
+        'speed_limit': 0.8   # MB/s (800KB/s)
+    },
+    'personal': { # Created via registration
+        'download_limit': 5, # per hour (includes playlist)
+        'proxy_limit': 50,
+        'speed_limit': 2.0   # MB/s
+    },
+    'admin': {
+        'download_limit': 9999,
+        'proxy_limit': 9999,
+        'speed_limit': 0 # Unlimited
+    }
+}
+
+# Notifications Store
+# username -> list of notification dicts { "id": str, "message": str, "type": "info"|"error"|"success", "timestamp": float }
+user_notifications: Dict[str, List[Dict]] = {}
+
+def add_notification(username: str, message: str, type: str = "info"):
+    if username not in user_notifications:
+        user_notifications[username] = []
+    user_notifications[username].append({
+        "id": str(uuid.uuid4()),
+        "message": message,
+        "type": type,
+        "timestamp": time.time()
+    })
+
+def check_rate_limit(username: str, role: str, action: str) -> bool:
+    if role == 'admin': return True
+    
+    # Determine limit type
+    limit_key = 'personal' if role != 'user' else 'user' # 'user' role is the shared account
+    if action == 'download':
+        limit = LIMITS[limit_key]['download_limit']
+    elif action == 'proxy':
+        limit = LIMITS[limit_key]['proxy_limit']
+    else:
+        return True
+        
+    now = time.time()
+    if username not in user_usage:
+        user_usage[username] = {'download': [], 'proxy': []}
+    
+    # Clean old timestamps (older than 1h)
+    user_usage[username][action] = [t for t in user_usage[username][action] if now - t < 3600]
+    
+    if len(user_usage[username][action]) >= limit:
+        return False
+    
+    return True
+
+def add_rate_limit_usage(username: str, action: str):
+    if username not in user_usage:
+        user_usage[username] = {'download': [], 'proxy': []}
+    user_usage[username][action].append(time.time())
 
 # Stats
 active_clients: Dict[str, float] = {} # IP -> Last Access Timestamp
@@ -162,9 +227,9 @@ def check_auth(request: Request):
 # Middleware for Auth & Load Limit
 @app.middleware("http")
 async def auth_and_limit_middleware(request: Request, call_next):
-    # Allow static resources and login endpointsapi/auth/register", "/api/client/handshake", "/
+    # Allow static resources and login endpoints
     if request.url.path.startswith("/static") or \
-       request.url.path in ["/login", "/api/login", "/system/info"]:
+       request.url.path in ["/login", "/api/login", "/system/info", "/api/auth/register", "/api/client/handshake"]:
         return await call_next(request)
     
     # Check Auth
@@ -229,9 +294,36 @@ for path in ffmpeg_paths:
 if not ffmpeg_found:
     logging.warning("ffmpeg not found in bundled or execution directories. Relying on system PATH.")
 
-# --- Job Management ---
+# --- Background Tasks ---
 
-class JobStatus:
+def cleanup_old_files():
+    """Delete files older than 3 days in DOWNLOAD_DIR"""
+    try:
+        now = time.time()
+        days_3 = 3 * 24 * 3600
+        
+        if os.path.exists(DOWNLOAD_DIR):
+            for f in os.listdir(DOWNLOAD_DIR):
+                fp = os.path.join(DOWNLOAD_DIR, f)
+                if os.path.isfile(fp):
+                    try:
+                        stat = os.stat(fp)
+                        # Use modification time
+                        if now - stat.st_mtime > days_3:
+                            logging.info(f"Deleting old file: {f}")
+                            os.remove(fp)
+                    except Exception as e:
+                        logging.error(f"Error deleting old file {f}: {e}")
+                        
+        logging.info("Cleanup completed")
+    except Exception as e:
+        logging.error(f"Cleanup failed: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    # Run cleanup on startup
+    executor.submit(cleanup_old_files)
+
     QUEUED = "queued"
     DOWNLOADING = "downloading"
     FINISHED = "finished"
@@ -295,6 +387,14 @@ def progress_hook(d, job_id):
             details = f"Download Finished: {job.title or job.url} ({job.filename})"
             if job.username:
                  details += f" User: {job.username}"
+                 # Notify user
+                 msg = f"ダウンロードが完了しました: {job.title or job.filename}"
+                 add_notification(job.username, msg, "success")
+            
+            # Notify admin if heavy/long download (simple heuristic: if it took > 10 mins or size > 1GB?)
+            # Since we don't track duration easily here without start time, let's just notify admin for every completion or errors
+            # Or assume explicit requirement: "download complete notification"
+            
             if job.client_id:
                  details += f" CID: {job.client_id}"
             
@@ -306,7 +406,25 @@ def run_download(job_id: str, req: DownloadRequest):
     if not job:
         return
 
-    logging.info(f"Starting job {job_id}: {req.url}")
+    # Determine rate limit based on user role
+    limit_rate = None
+    if job.username:
+        # Resolve role. We don't have role stored in job, but we can infer or pass it.
+        # Ideally job should store role.
+        # For now, let's query DB or cache?
+        # Or just use the default logic: if username == 'user' -> user, 'admin' -> admin, else personal
+        if job.username == 'admin':
+            role = 'admin'
+        elif job.username == 'user':
+            role = 'user'
+        else:
+            role = 'personal'
+            
+        limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
+        if limit_mb > 0:
+            limit_rate = str(int(limit_mb * 1024 * 1024)) # to bytes
+            
+    logging.info(f"Starting job {job_id}: {req.url} (Limit: {limit_rate})")
     
     # Use TEMP_DIR for downloading
     # Use job_id as filename to avoid ambiguity and encoding issues during download
@@ -318,10 +436,13 @@ def run_download(job_id: str, req: DownloadRequest):
         'writethumbnail': False,
         'restrictfilenames': True, 
         'windowsfilenames': True,
-        'noplaylist': True,
+        'noplaylist': False, # Changed to False to allow playlist if requested (see below logic)
         # Automatic Cookie Handling: try to load from browser if cookies.txt is missing
         'cookiesfrombrowser': ('chrome', 'edge', 'firefox'),
     }
+    
+    if limit_rate:
+        ydl_opts['ratelimit'] = limit_rate
 
     # Subtitle options
     if req.subtitles:
@@ -439,8 +560,16 @@ def run_download(job_id: str, req: DownloadRequest):
             job.filename = final_filenames[0] # Set the first one as main
             job.status = JobStatus.FINISHED
             logging.info(f"Job {job_id} completed. Filename: {job.filename}")
+            
+            # Record owner
+            if job.username:
+                 db_utils.add_file_owner(job.filename, job.username)
+                 # Handle bulk parts if distinct? Assuming single file or playlist.
+                 for fname in final_filenames[1:]:
+                      db_utils.add_file_owner(fname, job.username)
         
     except Exception as e:
+
         job.status = JobStatus.ERROR
         job.error_msg = str(e)
         logging.error(f"Job {job_id} failed: {e}")
@@ -491,12 +620,20 @@ async def start_download(request: DownloadRequest, req: Request):
     
     # Metadata extraction
     username = None
+    role = "user"
     token = req.cookies.get(AUTH_COOKIE_NAME)
     if token:
          sess = sessions.get(token)
          if sess:
              username = sess.get('username')
+             role = sess.get('role', 'user')
     
+    # Rate Limit Check
+    if username:
+        if not check_rate_limit(username, role, 'download'):
+             raise HTTPException(status_code=429, detail="API Limit Exceeded: Download quota reached for this hour.")
+        add_rate_limit_usage(username, 'download')
+
     client_id = req.cookies.get('CLIENT_ID')
     
     job = DownloadJob(
@@ -533,19 +670,62 @@ async def delete_job(job_id: str):
     return {"message": "Deleted"}
 
 @app.get("/files", response_model=List[Dict])
-async def list_files():
+async def list_files(request: Request):
+    # Identify User
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    username = None
+    role = "guest"
+    if token and token in sessions:
+        sess = sessions[token]
+        username = sessions[token].get('username') # No longer just sessions[token] as it is a dict
+        # Wait, session was saved as { "exp", "role", "ip" } in login...
+        # Wait, I need to check login implementation.
+        # Login stores: "role", "ip", "exp". It does NOT store username.
+        # Let's check login again.
+        # Line 725: sessions[session_token] = { "exp": ..., "role": role, "ip": ... }
+        # I need to store username in session too.
+        pass
+
+    # Quick fix: Add username to session in login
+    
     files = []
     if os.path.exists(DOWNLOAD_DIR):
+        file_owners = db_utils.get_file_owners()
+        
+        # Determine effective role/username
+        if token and token in sessions:
+            sess = sessions[token]
+            role = sess.get('role', 'guest')
+            # I need username.
+            # I will modify login to store username.
+            # But for now, let's assume I can get it.
+            # Actually, I should update login now.
+            username = sess.get('username')
+            
         for f in os.listdir(DOWNLOAD_DIR):
             fp = os.path.join(DOWNLOAD_DIR, f)
             if os.path.isfile(fp):
                 try:
                     stat = os.stat(fp)
-                    files.append({
-                        "filename": f,
-                        "size": stat.st_size,
-                        "created_at": stat.st_ctime
-                    })
+                    owner = file_owners.get(f)
+                    
+                    # Filtering Logic
+                    is_visible = False
+                    
+                    if role == 'admin':
+                        is_visible = True
+                    elif owner == 'user' or owner is None:
+                        is_visible = True
+                    elif username and owner == username:
+                        is_visible = True
+                    
+                    if is_visible:
+                        files.append({
+                            "filename": f,
+                            "size": stat.st_size,
+                            "created_at": stat.st_ctime,
+                            "owner": owner
+                        })
                 except Exception:
                     pass
     # Sort by newest
@@ -662,7 +842,8 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
     # Check Username
     token = request.cookies.get(AUTH_COOKIE_NAME)
     username = None
-    if token:
+    if token:,
+            "username": req.username
         session = sessions.get(token)
         if session:
             username = session.get('username')
@@ -690,31 +871,61 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
     
     return {"client_id": client_id, "username": username}
 
-@app.post("/api/login")
-async def login(req: LoginRequest, response: Response, request: Request):
-    # db_utils.init_db() ensures admin/user exists.
-    role = db_utils.authenticate_user(req.username, req.password)
-    
-    # Fallback to hardcoded USERS if DB auth fails (for transition safety)
-    if not role and req.username in USERS and USERS[req.username] == req.password:
-        role = "admin" if req.username == "admin" else "user"
+@app.pos# Concurrent Login Check: Remove old sessions for this user (Except Admin?)
+        # User requested: "Concurrent login forbidden. Log out previous session."
+        if req.username != "admin": # Admin might need multiple sessions? Requirement says "Concurrent login disallowed" generally.
+            # Let's apply to all or just non-admin?
+            # "同時ログインの禁止" apply generally.
+            tokens_to_remove = [k for k, v in sessions.items() if v.get('username') == req.username]
+            for t in tokens_to_remove:
+                del sessions[t]
 
-    if role:
-        # Create session
-        session_token = secrets.token_urlsafe(32)
-        sessions[session_token] = {
-            "exp": time.time() + (12 * 3600), # 12 hours
-            "role": role,
-            "ip": request.client.host
-        }
-        
-        db_utils.log_event(request.client.host, "LOGIN", f"User: {req.username}")
-        # PWA Session Duration (30 days) vs Normal (12 hours)
-        max_age = 30 * 24 * 3600 if req.is_pwa else 12 * 3600
-        
         response.set_cookie(
             key=AUTH_COOKIE_NAME,
             value=session_token,
+            httponly=True,
+            secure=False, 
+            max_age=max_age
+        )
+        return {"message": "Logged in", "role": role}
+    else:
+        db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
+        # Check if username exists to give hint
+        if db_utils.check_username_exists(req.username):
+             raise HTTPException(status_code=401, detail="パスワードが違います。忘れた場合は管理者へ連絡してください。")
+        raise HTTPException(status_code=401, detail="認証に失敗しました")
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest, request: Request):
+    nickname = req.nickname.strip()
+    password = req.password.strip()
+    
+    # Check existing
+    if db_utils.check_username_exists(nickname):
+         raise HTTPException(status_code=400, detail="この名前は既に使用されています。ログインするか、別の名前を使用してください。")
+    
+    if len(nickname) < 3:
+         raise HTTPException(status_code=400, detail="ユーザー名は3文字以上にしてください")
+         
+    # Password Policy: 4-20 alphanumeric
+    if not (4 <= len(password) <= 20) or not password.isalnum():
+         raise HTTPException(status_code=400, detail="パスワードは4文字以上20文字以下の英数字にしてください")
+         
+    success = db_utils.register_user_request(
+        nickname=nickname,
+        password=password,
+        ip=request.client.host,
+        ua=req.ua,
+        screen=req.screen
+    )
+    
+    if not success:
+         raise HTTPException(status_code=400, detail="登録に失敗しました (重複の可能性があります)")
+    
+    # Notify Admin
+    add_notification("admin", f"新しいユーザー登録承認待ち: {nickname}", "info")
+         
+    return {"message": "登録リクエストを送信しました。承認をお待ちください。
             httponly=True,
             secure=False, 
             max_age=max_age
@@ -1186,6 +1397,19 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         if db_utils.is_ip_blocked(client_ip):
              return Response(content="Access Denied: Your IP is blocked.", status_code=403)
 
+        # Rate Limit Check
+        token = request.cookies.get(AUTH_COOKIE_NAME)
+        username = None
+        role = "guest"
+        if token and token in sessions:
+            username = sessions[token].get('username')
+            role = sessions[token].get('role', 'user')
+            
+        if username:
+            if not check_rate_limit(username, role, 'proxy'):
+                return Response(content="API Limit Exceeded: Proxy quota reached for this hour.", status_code=429)
+            add_rate_limit_usage(username, 'proxy')
+
         data = proxy_service.decrypt_payload(payload)
         url = data['url']
         
@@ -1286,6 +1510,45 @@ async def get_info(url: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@app.post("/api/user/password")
+async def change_password(req: ChangePasswordRequest, request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or token not in sessions:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    username = sessions[token].get('username')
+    role = sessions[token].get('role')
+    
+    # Authenticate current password (unless admin changing own?)
+    # Users in DB have ID. users in USERS dict (fallback) don't.
+    # We only support changing DB users for now.
+    
+    # Verify current password
+    auth_role = db_utils.authenticate_user(username, req.current_password)
+    
+    # Handle hardcoded USERS fallback? User 'user' has password 'user'.
+    # If not in DB, auth_role is None.
+    if not auth_role:
+        # Check hardcoded
+        if username in USERS and USERS[username] == req.current_password:
+             pass # Hardcoded user cannot change password in DB easily unless we insert them.
+             # We should skip hardcoded user password change or force them to migrate?
+             # For now, if not in DB, fail.
+             raise HTTPException(status_code=403, detail="Invalid current password or account not in DB")
+        else:
+             raise HTTPException(status_code=403, detail="Invalid current password")
+
+    if len(req.new_password) < 4:
+         raise HTTPException(status_code=400, detail="Password too short")
+         
+    # Update DB
+    db_utils.update_user_password(username, req.new_password)
+    return {"message": "Password updated"}
+
 @app.get("/system/info")
 async def system_info(request: Request):
     """Get system status and load info"""
@@ -1297,7 +1560,7 @@ async def system_info(request: Request):
     if token and token in sessions:
         role = sessions[token].get("role", "user")
 
-    return {
+    resp = {
         "hostname": socket.gethostname(),
         "active_jobs": active_jobs,
         "active_clients": get_active_client_count(),
@@ -1305,6 +1568,11 @@ async def system_info(request: Request):
         "version": app.version,
         "role": role
     }
+    
+    if role == 'admin':
+        resp['pending_users'] = db_utils.get_pending_users_count()
+        
+    return resp
 
 @app.get("/api/search")
 async def search_youtube_endpoint(q: str):
@@ -1343,6 +1611,96 @@ async def logout(response: Response, request: Request):
     db_utils.log_event(request.client.host, "LOGOUT", "")
     response.delete_cookie(AUTH_COOKIE_NAME)
     return {"message": "Logged out"}
+
+@app.get("/api/notifications")
+async def get_notifications(request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or token not in sessions:
+         return []
+    
+    username = sessions[token].get('username')
+    role = sessions[token].get('role')
+    
+    notifs = []
+    
+    # 1. User specific notifications (from memory)
+    if username in user_notifications:
+        notifs.extend(user_notifications[username])
+        # Clear fetched
+        user_notifications[username] = []
+        
+    # 2. Role specific checks
+    if role == 'admin':
+        pending = db_utils.get_pending_users_count()
+        if pending > 0:
+            notifs.append({
+                "id": "pending_users",
+                "message": f"承認待ちユーザーが {pending} 人います",
+                "type": "warning",
+                "timestamp": time.time()
+            })
+            
+    return notifs
+
+@app.get("/api/preview/{filename}")
+async def preview_video(filename: str, request: Request):
+    """
+    Transcoded preview for heavy videos. 
+    Output: Low bitrate MP4 for smooth playback.
+    """
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token or token not in sessions:
+         raise HTTPException(status_code=401)
+    
+    # Security Check
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400)
+         
+    file_path = os.path.join(DOWNLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404)
+        
+    # ffmpeg command to transcode
+    cmd = [
+        "ffmpeg",
+        "-i", file_path,
+        "-vf", "scale=-2:480", # Downscale to 480p
+        "-c:v", "libx264",
+        "-b:v", "500k",        # 500kbps video
+        "-preset", "ultrafast",
+        "-c:a", "aac",
+        "-b:a", "64k",
+        "-f", "mp4",
+        "-movflags", "frag_keyframe+empty_moov",
+        "-"
+    ]
+    
+    # Async generator
+    async def iter_ffmpeg():
+        try:
+            # Hide console window on Windows
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                startupinfo=startupinfo
+            )
+            
+            while True:
+                chunk = await proc.stdout.read(1024 * 64)
+                if not chunk:
+                    break
+                yield chunk
+            await proc.wait()
+        except Exception as e:
+            logging.error(f"FFmpeg Preview Error: {e}")
+
+    return StreamingResponse(iter_ffmpeg(), media_type="video/mp4")
 
 @app.post("/system/cookies")
 async def upload_cookies(request: Request, file: UploadFile = File(...)):
