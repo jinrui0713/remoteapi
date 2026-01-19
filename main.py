@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.6")
+app = FastAPI(title="yt-dlp API Server", version="8.2.8")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
