@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.8")
+app = FastAPI(title="yt-dlp API Server", version="8.2.9")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -887,7 +887,7 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
     
     return {"client_id": client_id, "username": username}
 
-@app.post("/login")
+@app.post("/api/login")
 async def login(req: LoginRequest, response: Response, request: Request):
     user = db_utils.verify_user(req.username, req.password)
     if user:
