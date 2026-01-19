@@ -1374,6 +1374,15 @@ async def proxy_resource(payload: str, request: Request):
         if db_utils.is_ip_blocked(client_ip):
              return Response(content="Access Denied", status_code=403)
 
+        # Determine Speed Limit
+        token = request.cookies.get(AUTH_COOKIE_NAME)
+        role = "guest"
+        if token and token in sessions:
+            role = sessions[token].get('role', 'user')
+            
+        limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
+        limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
+
         data = proxy_service.decrypt_payload(payload)
         url = data['url']
         
@@ -1381,7 +1390,7 @@ async def proxy_resource(payload: str, request: Request):
         
         # Stream response
         return StreamingResponse(
-            proxy_service.stream_response(resp, client_ip),
+            proxy_service.stream_response(resp, client_ip, limit_bps),
             media_type=resp.headers.get("content-type", "application/octet-stream"),
             headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
         )

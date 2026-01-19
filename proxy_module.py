@@ -15,8 +15,8 @@ import db_utils
 
 # Configuration
 PROXY_KEY = secrets.token_bytes(32) # In production, this should be persistent
-MAX_SPEED_BPS = 1024 * 1024 # 1MB/s (Throttled speed)
-BURST_THRESHOLD_BPS = 1.5 * 1024 * 1024 # 1.5MB/s (Trigger threshold)
+DEFAULT_MAX_SPEED_BPS = 1024 * 1024 # 1MB/s (Throttled speed)
+DEFAULT_BURST_THRESHOLD_BPS = 1.5 * 1024 * 1024 # 1.5MB/s (Trigger threshold)
 BURST_DURATION = 2.0 # Seconds
 CHUNK_SIZE = 64 * 1024 # 64KB
 
@@ -31,7 +31,7 @@ class ProxyService:
         # Track client bandwidth usage: IP -> {window_start: float, bytes: int, throttled_until: float}
         self.client_stats: Dict[str, Dict] = {}
 
-    def _update_stats(self, client_ip: str, chunk_size: int) -> bool:
+    def _update_stats(self, client_ip: str, chunk_size: int, limit_bps: int = None) -> bool:
         """
         Updates stats and returns True if request should be throttled.
         """
@@ -49,6 +49,10 @@ class ProxyService:
         if now < stats["throttled_until"]:
             return True
             
+        # If no limit or unlimited (0), don't throttle
+        if limit_bps is None or limit_bps <= 0:
+            return False
+
         # Update Window
         if now - stats["window_start"] > BURST_DURATION:
             # Calculate speed in previous window
@@ -59,8 +63,11 @@ class ProxyService:
             stats["window_start"] = now
             stats["bytes"] = 0
             
+            # Use burst threshold relative to limit (e.g. 1.5x)
+            burst_threshold = limit_bps * 1.5
+            
             # Check if we exceeded threshold
-            if speed > BURST_THRESHOLD_BPS:
+            if speed > burst_threshold:
                 # Throttle for next window (e.g. 5 seconds)
                 stats["throttled_until"] = now + 5.0
                 return True
@@ -595,7 +602,7 @@ class ProxyService:
 
         return str(soup)
 
-    async def stream_response(self, response: httpx.Response, client_ip: str = "unknown"):
+    async def stream_response(self, response: httpx.Response, client_ip: str = "unknown", limit_bps: int = None):
         try:
             total_bytes = 0
             
@@ -653,8 +660,8 @@ class ProxyService:
                     total_bytes += size
                     yield chunk
                     
-                    if self._update_stats(client_ip, size):
-                        expected_time = size / MAX_SPEED_BPS
+                    if limit_bps and limit_bps > 0 and self._update_stats(client_ip, size, limit_bps):
+                        expected_time = size / limit_bps
                         await asyncio.sleep(expected_time)
             
             # Log bandwidth
