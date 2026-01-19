@@ -859,8 +859,7 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
     # Check Username
     token = request.cookies.get(AUTH_COOKIE_NAME)
     username = None
-    if token:,
-            "username": req.username
+    if token:
         session = sessions.get(token)
         if session:
             username = session.get('username')
@@ -888,14 +887,30 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
     
     return {"client_id": client_id, "username": username}
 
-@app.pos# Concurrent Login Check: Remove old sessions for this user (Except Admin?)
-        # User requested: "Concurrent login forbidden. Log out previous session."
-        if req.username != "admin": # Admin might need multiple sessions? Requirement says "Concurrent login disallowed" generally.
-            # Let's apply to all or just non-admin?
-            # "同時ログインの禁止" apply generally.
-            tokens_to_remove = [k for k, v in sessions.items() if v.get('username') == req.username]
-            for t in tokens_to_remove:
-                del sessions[t]
+@app.post("/login")
+async def login(req: LoginRequest, response: Response, request: Request):
+    user = db_utils.verify_user(req.username, req.password)
+    if user:
+        # Generate Session
+        session_token = str(uuid.uuid4())
+        role = user.get('role', 'user')
+        if role == 'pending':
+             raise HTTPException(status_code=403, detail="承認待ちのアカウントです")
+             
+        max_age = LIMITS[role]['session_duration']
+        
+        # Concurrent Login Check
+        tokens_to_remove = [k for k, v in sessions.items() if v.get('username') == req.username]
+        for t in tokens_to_remove:
+            del sessions[t]
+
+        sessions[session_token] = {
+            'username': req.username,
+            'role': role,
+            'expires': time.time() + max_age
+        }
+
+        db_utils.log_event(request.client.host, "LOGIN_SUCCESS", f"User: {req.username}")
 
         response.set_cookie(
             key=AUTH_COOKIE_NAME,
@@ -942,36 +957,7 @@ async def register(req: RegisterRequest, request: Request):
     # Notify Admin
     add_notification("admin", f"新しいユーザー登録承認待ち: {nickname}", "info")
          
-    return {"message": "登録リクエストを送信しました。承認をお待ちください。
-            httponly=True,
-            secure=False, 
-            max_age=max_age
-        )
-        return {"message": "Logged in", "role": role}
-    else:
-        db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
-        raise HTTPException(status_code=401, detail="Invalid credentials or account pending approval")
-
-@app.post("/api/auth/register")
-async def register(req: RegisterRequest, request: Request):
-    nickname = req.nickname.strip()
-    password = req.password.strip()
-    
-    if len(nickname) < 3 or len(password) < 4:
-         raise HTTPException(status_code=400, detail="Nickname (3+) or Password (4+) too short")
-         
-    success = db_utils.register_user_request(
-        nickname=nickname,
-        password=password,
-        ip=request.client.host,
-        ua=req.ua,
-        screen=req.screen
-    )
-    
-    if not success:
-         raise HTTPException(status_code=400, detail="Username already taken")
-         
-    return {"message": "Registration requested. Please wait for admin approval."}
+    return {"message": "登録リクエストを送信しました。承認をお待ちください。"}
 
 
 @app.get("/api/admin/stats")
