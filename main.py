@@ -594,6 +594,16 @@ async def stream_video(url: str, request: Request):
     """
     try:
         ydl_opts = {'format': 'best', 'quiet': True}
+        
+        # Determine Speed Limit
+        token = request.cookies.get(AUTH_COOKIE_NAME)
+        role = "guest"
+        if token and token in sessions:
+            role = sessions[token].get('role', 'user')
+        
+        limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
+        limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             stream_url = info.get('url')
@@ -601,12 +611,19 @@ async def stream_video(url: str, request: Request):
                 raise Exception("No stream URL found")
             
             # Proxy the stream
+            # We use the proxy_service logic to utilize the speed limiter (stream_response)
+            # But stream_response takes an httpx.Response object.
+            # We need to make the request using proxy_service.client (or similar) or create options.
+            # proxy_service.client is pre-configured.
+            
+            # Since stream_response closes the response, we should be careful.
+            
             client = httpx.AsyncClient(verify=False, follow_redirects=True)
             req_stream = client.build_request("GET", stream_url)
             r = await client.send(req_stream, stream=True)
             
             return StreamingResponse(
-                r.aiter_bytes(),
+                proxy_service.stream_response(r, request.client.host, limit_bps),
                 status_code=r.status_code,
                 media_type=r.headers.get("content-type"),
             )
@@ -1419,6 +1436,9 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
                 return Response(content="API Limit Exceeded: Proxy quota reached for this hour.", status_code=429)
             add_rate_limit_usage(username, 'proxy')
 
+        limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
+        limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
+
         data = proxy_service.decrypt_payload(payload)
         url = data['url']
         
@@ -1437,7 +1457,7 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         else:
             # Stream other content with limit
             return StreamingResponse(
-                proxy_service.stream_response(resp, client_ip),
+                proxy_service.stream_response(resp, client_ip, limit_bps),
                 media_type=content_type,
                 headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
             )
