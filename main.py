@@ -51,41 +51,51 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.12")
+app = FastAPI(title="yt-dlp API Server", version="8.2.13")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
 async def monitor_traffic(request: Request, call_next):
-    client_ip = request.client.host
-    
-    # 1. Check Blocked IP
-    if db_utils.is_ip_blocked(client_ip):
-        return Response(content="Access Denied: Your IP is blocked.", status_code=403)
+    try:
+        client_ip = request.client.host
+        
+        # 1. Check Blocked IP
+        if db_utils.is_ip_blocked(client_ip):
+            return Response(content="Access Denied: Your IP is blocked.", status_code=403)
 
-    # 2. Track Active Clients
-    active_clients[client_ip] = time.time()
-    
-    # 3. Capture Request Size (Approx)
-    req_size = int(request.headers.get("content-length", 0))
-    
-    # 4. Process Request
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    
-    # 5. Capture Response Size
-    res_size = 0
-    if "content-length" in response.headers:
-        res_size = int(response.headers["content-length"])
-    
-    # 6. Log Bandwidth (if not already logged by proxy/download specific logic)
-    # Note: Streaming responses might not have content-length set correctly here.
-    # Proxy module handles its own logging.
-    # We log here for general API usage and static files.
-    if not request.url.path.startswith("/proxy") and not request.url.path.startswith("/api/download"):
-         db_utils.log_bandwidth(client_ip, req_size, res_size, "api")
+        # 2. Track Active Clients
+        # Ensure active_clients is available
+        if 'active_clients' in globals():
+            active_clients[client_ip] = time.time()
+        
+        # 3. Capture Request Size (Approx)
+        req_size = int(request.headers.get("content-length", 0))
+        
+        # 4. Process Request
+        start_time = time.time()
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        
+        # 5. Capture Response Size
+        res_size = 0
+        if "content-length" in response.headers:
+            res_size = int(response.headers["content-length"])
+        
+        # 6. Log Bandwidth (if not already logged by proxy/download specific logic)
+        # Note: Streaming responses might not have content-length set correctly here.
+        # Proxy module handles its own logging.
+        # We log here for general API usage and static files.
+        if not request.url.path.startswith("/proxy") and not request.url.path.startswith("/api/download"):
+             try:
+                 db_utils.log_bandwidth(client_ip, req_size, res_size, "api")
+             except:
+                 pass
 
-    return response
+        return response
+    except Exception as e:
+        print(f"Middleware Error: {e}")
+        # Try to proceed if possible or return 500
+        return Response("Internal Server Error (Middleware)", status_code=500)
 
 # CORS設定
 app.add_middleware(
@@ -120,6 +130,10 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 
 if os.path.exists(DOWNLOAD_DIR):
     app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204) # No content
 
 # --- Auth & Stats ---
 AUTH_COOKIE_NAME = "ytdlp_auth"
@@ -892,43 +906,51 @@ async def client_handshake(info: ClientInfo, request: Request, response: Respons
 
 @app.post("/api/login")
 async def login(req: LoginRequest, response: Response, request: Request):
-    user = db_utils.verify_user(req.username, req.password)
-    if user:
-        # Generate Session
-        session_token = str(uuid.uuid4())
-        role = user.get('role', 'user')
-        if role == 'pending':
-             raise HTTPException(status_code=403, detail="承認待ちのアカウントです")
-             
-        max_age = LIMITS[role]['session_duration']
-        
-        # Concurrent Login Check
-        tokens_to_remove = [k for k, v in sessions.items() if v.get('username') == req.username]
-        for t in tokens_to_remove:
-            del sessions[t]
+    try:
+        user = db_utils.verify_user(req.username, req.password)
+        if user:
+            # Generate Session
+            session_token = str(uuid.uuid4())
+            role = user.get('role', 'user')
+            if role == 'pending':
+                 raise HTTPException(status_code=403, detail="承認待ちのアカウントです")
+            
+            # Safe role lookup
+            if role not in LIMITS:
+                role = 'user'
+                 
+            max_age = LIMITS[role]['session_duration']
+            
+            # Concurrent Login Check
+            tokens_to_remove = [k for k, v in sessions.items() if v.get('username') == req.username]
+            for t in tokens_to_remove:
+                del sessions[t]
 
-        sessions[session_token] = {
-            'username': req.username,
-            'role': role,
-            'expires': time.time() + max_age
-        }
+            sessions[session_token] = {
+                'username': req.username,
+                'role': role,
+                'expires': time.time() + max_age
+            }
 
-        db_utils.log_event(request.client.host, "LOGIN_SUCCESS", f"User: {req.username}")
+            db_utils.log_event(request.client.host, "LOGIN_SUCCESS", f"User: {req.username}")
 
-        response.set_cookie(
-            key=AUTH_COOKIE_NAME,
-            value=session_token,
-            httponly=True,
-            secure=False, 
-            max_age=max_age
-        )
-        return {"message": "Logged in", "role": role}
-    else:
-        db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
-        # Check if username exists to give hint
-        if db_utils.check_username_exists(req.username):
-             raise HTTPException(status_code=401, detail="パスワードが違います。忘れた場合は管理者へ連絡してください。")
-        raise HTTPException(status_code=401, detail="認証に失敗しました")
+            response.set_cookie(
+                key=AUTH_COOKIE_NAME,
+                value=session_token,
+                httponly=True,
+                secure=False, 
+                max_age=max_age
+            )
+            return {"message": "Logged in", "role": role}
+        else:
+            db_utils.log_event(request.client.host, "LOGIN_FAILED", f"User: {req.username}")
+            # Check if username exists to give hint
+            if db_utils.check_username_exists(req.username):
+                 raise HTTPException(status_code=401, detail="パスワードが違います。忘れた場合は管理者へ連絡してください。")
+            raise HTTPException(status_code=401, detail="認証に失敗しました")
+    except Exception as e:
+        logging.error(f"Login Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Login Handler Error: {str(e)}")
 
 @app.post("/api/auth/register")
 async def register(req: RegisterRequest, request: Request):

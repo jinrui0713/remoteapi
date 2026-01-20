@@ -171,7 +171,7 @@ def verify_user(username, password):
         except:
             pass
             
-        if row['role'] == 'pending':
+        if str(row['role']) == 'pending':
             return None
             
         return dict(row)
