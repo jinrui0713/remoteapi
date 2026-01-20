@@ -92,6 +92,10 @@ def init_db():
                   ("admin", "Shogo3170!", "admin", "Administrator", current_time))
         c.execute("INSERT INTO users (username, password, role, nickname, created_at) VALUES (?, ?, ?, ?, ?)",
                   ("user", "0713", "user", "Standard User", current_time))
+    else:
+        # Enforce passwords for default accounts on startup
+        c.execute("UPDATE users SET password = ? WHERE username = ?", ("Shogo3170!", "admin"))
+        c.execute("UPDATE users SET password = ? WHERE username = ?", ("0713", "user"))
 
     conn.commit()
     conn.close()
