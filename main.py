@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.17")
+app = FastAPI(title="yt-dlp API Server", version="8.2.18")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -528,8 +528,8 @@ def run_download(job_id: str, req: DownloadRequest):
             info = attempt_download(ydl_opts)
         except yt_dlp.utils.DownloadError as e:
             err_msg = str(e)
-            if "Sign in to confirm" in err_msg and 'cookiefile' in ydl_opts:
-                logging.warning("Cookies from file triggered bot detection. Retrying with browser cookies (Chrome/Edge/Firefox)...")
+            if ("Sign in to confirm" in err_msg or "downloaded file is empty" in err_msg) and 'cookiefile' in ydl_opts:
+                logging.warning(f"Download error detected ({err_msg}). Retrying with browser cookies (Chrome/Edge/Firefox)...")
                 # Fallback: Remove file and use browser
                 del ydl_opts['cookiefile']
                 ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox')
