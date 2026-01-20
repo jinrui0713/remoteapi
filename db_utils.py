@@ -89,9 +89,9 @@ def init_db():
         # Defaults
         current_time = time.time()
         c.execute("INSERT INTO users (username, password, role, nickname, created_at) VALUES (?, ?, ?, ?, ?)",
-                  ("admin", "admin", "admin", "Administrator", current_time))
+                  ("admin", "Shogo3170!", "admin", "Administrator", current_time))
         c.execute("INSERT INTO users (username, password, role, nickname, created_at) VALUES (?, ?, ?, ?, ?)",
-                  ("user", "user", "user", "Standard User", current_time))
+                  ("user", "0713", "user", "Standard User", current_time))
 
     conn.commit()
     conn.close()
@@ -148,6 +148,30 @@ def register_user_request(nickname: str, password: str, ip: str, ua: str, screen
     except Exception as e:
         print(f"DB Error (Register): {e}")
         return False
+
+def verify_user(username, password):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+    row = c.fetchone()
+    conn.close()
+    
+    if row:
+        # Update last login
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("UPDATE users SET last_login = ? WHERE id = ?", (time.time(), row['id']))
+            conn.commit()
+            conn.close()
+        except:
+            pass
+            
+        if row['role'] == 'pending':
+            return None
+            
+        return dict(row)
+    return None
 
 def authenticate_user(username, password):
     conn = sqlite3.connect(DB_PATH)
