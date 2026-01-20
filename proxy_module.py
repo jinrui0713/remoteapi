@@ -152,7 +152,17 @@ class ProxyService:
         for meta in soup.find_all('meta'):
             if meta.get('http-equiv', '').lower() in ['content-security-policy', 'x-frame-options', 'permissions-policy']:
                 meta.decompose()
+            # Remove existing charset declarations to avoid conflicts with our UTF-8 output
+            if meta.get('charset'):
+                meta.decompose()
+            if meta.get('http-equiv', '').lower() == 'content-type':
+                meta.decompose()
 
+        # Inject UTF-8 meta ensures browser uses UTF-8 even if headers are missing
+        if soup.head:
+            meta_utf8 = soup.new_tag('meta', charset='utf-8')
+            soup.head.insert(0, meta_utf8)
+        
         from urllib.parse import urljoin
         
         # --- 1. Title Spoofing ---

@@ -349,6 +349,7 @@
     <div class="container py-4" id="app">
         <!-- Notification Blocker Overlay -->
         <div v-if="notificationDenied" class="position-fixed top-0 start-0 w-100 h-100 bg-dark d-flex justify-content-center align-items-center" style="z-index: 9999; opacity: 0.98; left: 0;">
+            <button type="button" @click="notificationDenied = false" class="btn-close btn-close-white" style="position: absolute; top: 15px; right: 15px; width: 0.5em; height: 0.5em; background-size: 0.5em;" aria-label="Close"></button>
             <div class="text-center text-white p-4">
                 <i class="bi bi-bell-slash fs-1 text-danger mb-3"></i>
                 <h3>{{ t('notification_required_title') }}</h3>
@@ -367,7 +368,7 @@
                 </div>
                 <div>
                     <h4 class="mb-0 fw-bold">{{ t('app_title') }}</h4>
-                    <small class="text-muted">v8.2.4 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
+                    <small class="text-muted">v8.2.15 &bull; {{ userRole === 'admin' ? 'Administrator' : 'User' }}</small>
                 </div>
             </div>
             
@@ -1769,14 +1770,10 @@
                     try {
                         const url = this.getDownloadUrl(file);
                         
+                        
                         // Fetch with progress
-                        const response = await axios.get(url, {
-                            responseType: 'blob',
-                            onDownloadProgress: (progressEvent) => {
-                                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                                this.offlineProgress = percentCompleted;
-                            }
-                        });
+                        // First fetch seems redundant or accidental duplicate if the second one is the real one with AbortController
+                        // Removing the first fetch block to avoid duplicate declaration and double network request
                         
                         // Store in Cache
                         const cache = await caches.open('ytdlp-media-v1');
@@ -1942,7 +1939,6 @@
                         this.$nextTick(() => {
                             if (this.$refs.videoPlayer) {
                                 this.setupMediaSession(res.title, res.uploader, res.thumbnails);
-                            if (this.$refs.videoPlayer) {
                                 this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
                             }
                         });
@@ -2547,6 +2543,7 @@
                 },
                 formatDate(timestamp) {
                     return new Date(timestamp * 1000).toLocaleString();
+                },
                 
                 setupMediaSession(title, artist = 'Yt-Dlp Server', artwork = null) {
                     if ('mediaSession' in navigator) {
@@ -2600,7 +2597,6 @@
                         this.$nextTick(() => {
                             if (this.$refs.videoPlayer) {
                                 this.setupMediaSession(file.filename);
-                            if (this.$refs.videoPlayer) {
                                 this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
                             }
                         });

@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.14")
+app = FastAPI(title="yt-dlp API Server", version="8.2.15")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -96,9 +96,9 @@ async def monitor_traffic(request: Request, call_next):
 
         return response
     except Exception as e:
-        print(f"Middleware Error: {e}")
-        # Try to proceed if possible or return 500
-        return Response("Internal Server Error (Middleware)", status_code=500)
+        import traceback
+        logging.error(f"Middleware Error: {e}\n{traceback.format_exc()}")
+        return Response(content=f"Internal Server Error (Middleware): {e}", status_code=500, media_type="text/plain; charset=utf-8")
 
 # CORS設定
 app.add_middleware(
@@ -292,8 +292,9 @@ async def auth_and_limit_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
     except Exception as e:
-        logging.error(f"Auth Middleware Error: {e}")
-        return Response("Internal Server Error (Auth Middleware)", status_code=500)
+        import traceback
+        logging.error(f"Auth Middleware Error: {e}\n{traceback.format_exc()}")
+        return Response(content=f"Internal Server Error (Auth Middleware): {e}", status_code=500, media_type="text/plain; charset=utf-8")
 
 # ffmpeg設定
 ffmpeg_paths = [
@@ -350,6 +351,7 @@ async def startup_event():
     # Run cleanup on startup
     executor.submit(cleanup_old_files)
 
+class JobStatus:
     QUEUED = "queued"
     DOWNLOADING = "downloading"
     FINISHED = "finished"
@@ -938,7 +940,7 @@ async def login(req: LoginRequest, response: Response, request: Request):
             sessions[session_token] = {
                 'username': req.username,
                 'role': role,
-                'expires': time.time() + max_age
+                'exp': time.time() + max_age
             }
 
             db_utils.log_event(request.client.host, "LOGIN_SUCCESS", f"User: {req.username}")
@@ -947,7 +949,8 @@ async def login(req: LoginRequest, response: Response, request: Request):
                 key=AUTH_COOKIE_NAME,
                 value=session_token,
                 httponly=True,
-                secure=False, 
+                secure=True, # Allow use in IFrames/Cross-site if needed, but requires HTTPS
+                samesite='Lax', # Modern Browser default, prevents CSRF but allows top-level nav
                 max_age=max_age
             )
             return {"message": "Logged in", "role": role}
@@ -1473,7 +1476,7 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
             db_utils.log_bandwidth(client_ip, len(content), 0, "proxy")
             
             rewritten = proxy_service.rewrite_html(content, url)
-            return Response(content=rewritten, media_type="text/html")
+            return Response(content=rewritten, media_type="text/html; charset=utf-8")
         else:
             # Stream other content with limit
             return StreamingResponse(
@@ -1483,10 +1486,10 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
             )
 
     except HTTPException as he:
-        return Response(content=f"Proxy Error: {he.detail}", status_code=he.status_code)
+        return Response(content=f"Proxy Error: {he.detail}", status_code=he.status_code, media_type="text/plain; charset=utf-8")
     except Exception as e:
         logging.error(f"Proxy failed: {e}", exc_info=True)
-        return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500)
+        return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500, media_type="text/plain; charset=utf-8")
 
 @app.get("/proxy")
 async def proxy_get_handler():

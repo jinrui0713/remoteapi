@@ -3,7 +3,11 @@ import time
 import os
 from typing import List, Dict, Optional
 
-DB_PATH = os.path.join(os.environ.get('LOCALAPPDATA', '.'), 'YtDlpApiServer', 'server.db')
+if os.name == 'nt':
+    DB_PATH = os.path.join(os.environ.get('LOCALAPPDATA', os.getcwd()), 'YtDlpApiServer', 'server.db')
+else:
+    # Use Home directory for Linux to ensure write permissions and consistency
+    DB_PATH = os.path.join(os.path.expanduser("~"), ".YtDlpApiServer", "server.db")
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
