@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.15")
+app = FastAPI(title="yt-dlp API Server", version="8.2.17")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -519,82 +519,96 @@ def run_download(job_id: str, req: DownloadRequest):
             ydl_opts['format'] = f'bestvideo[vcodec^=avc][height<={req.quality}]+bestaudio[ext=m4a]/bestvideo[height<={req.quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={req.quality}][ext=mp4]/best[height<={req.quality}]'
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Start download and get info
-            info = ydl.extract_info(req.url, download=True)
-            
-            # Update title from final info
-            job.title = info.get('title', job.title)
-            channel_name = info.get('channel', 'UnknownChannel')
+        # Wrapper to allow retry logic
+        def attempt_download(opts):
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                 return ydl.extract_info(req.url, download=True)
 
-            # Find the downloaded file(s)
-            found_files = []
-            if os.path.exists(TEMP_DIR):
-                for f in os.listdir(TEMP_DIR):
-                    # Check for job_id prefix
-                    # Exclude temp files
-                    if f.startswith(job_id) and not f.endswith('.part') and not f.endswith('.ytdl'):
-                        found_files.append(os.path.join(TEMP_DIR, f))
+        try:
+            info = attempt_download(ydl_opts)
+        except yt_dlp.utils.DownloadError as e:
+            err_msg = str(e)
+            if "Sign in to confirm" in err_msg and 'cookiefile' in ydl_opts:
+                logging.warning("Cookies from file triggered bot detection. Retrying with browser cookies (Chrome/Edge/Firefox)...")
+                # Fallback: Remove file and use browser
+                del ydl_opts['cookiefile']
+                ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox')
+                info = attempt_download(ydl_opts)
+            else:
+                raise e
             
-            if not found_files:
-                logging.warning(f"No files found for job {job_id} in {TEMP_DIR}")
-                job.error_msg = "Download finished but file not found"
-                job.status = JobStatus.ERROR
-                return
+        # Update title from final info
+        job.title = info.get('title', job.title)
+        channel_name = info.get('channel', 'UnknownChannel')
 
-            # Move files to DOWNLOAD_DIR with correct name
-            from yt_dlp.utils import sanitize_filename
+        # Find the downloaded file(s)
+        found_files = []
+        if os.path.exists(TEMP_DIR):
+            for f in os.listdir(TEMP_DIR):
+                # Check for job_id prefix
+                # Exclude temp files
+                if f.startswith(job_id) and not f.endswith('.part') and not f.endswith('.ytdl'):
+                    found_files.append(os.path.join(TEMP_DIR, f))
+        
+        if not found_files:
+            logging.warning(f"No files found for job {job_id} in {TEMP_DIR}")
+            job.error_msg = "Download finished but file not found"
+            job.status = JobStatus.ERROR
+            return
+
+        # Move files to DOWNLOAD_DIR with correct name
+        from yt_dlp.utils import sanitize_filename
+        
+        final_filenames = []
+        for file_path in found_files:
+            ext = os.path.splitext(file_path)[1]
             
-            final_filenames = []
-            for file_path in found_files:
-                ext = os.path.splitext(file_path)[1]
-                
-                # Sanitize title and channel
-                safe_title = sanitize_filename(job.title)
-                safe_channel = sanitize_filename(channel_name)
-                
-                # Construct Desired Filename: Channel - Title
-                # If channel is missing, just use title
-                if safe_channel:
-                    base_name = f"{safe_channel} - {safe_title}"
-                else:
-                    base_name = safe_title
-                
-                if len(found_files) > 1:
-                    # Try to extract index from filename if possible
-                    fname = os.path.basename(file_path)
-                    try:
-                        # job_id_1.mp4 -> 1
-                        idx_part = fname.replace(job_id + '_', '').split('.')[0]
-                        new_filename = f"{base_name}_{idx_part}{ext}"
-                    except:
-                        new_filename = f"{base_name}_{os.path.basename(file_path)}{ext}"
-                else:
-                    new_filename = f"{base_name}{ext}"
-
-                dest_path = os.path.join(DOWNLOAD_DIR, new_filename)
-                
-                # Handle collision
-                counter = 1
-                base_dest = os.path.splitext(dest_path)[0]
-                while os.path.exists(dest_path):
-                    dest_path = f"{base_dest}_{counter}{ext}"
-                    counter += 1
-                
-                shutil.move(file_path, dest_path)
-                final_filenames.append(os.path.basename(dest_path))
-                logging.info(f"Moved {file_path} to {dest_path}")
-
-            job.filename = final_filenames[0] # Set the first one as main
-            job.status = JobStatus.FINISHED
-            logging.info(f"Job {job_id} completed. Filename: {job.filename}")
+            # Sanitize title and channel
+            safe_title = sanitize_filename(job.title)
+            safe_channel = sanitize_filename(channel_name)
             
-            # Record owner
-            if job.username:
-                 db_utils.add_file_owner(job.filename, job.username)
-                 # Handle bulk parts if distinct? Assuming single file or playlist.
-                 for fname in final_filenames[1:]:
-                      db_utils.add_file_owner(fname, job.username)
+            # Construct Desired Filename: Channel - Title
+            # If channel is missing, just use title
+            if safe_channel:
+                base_name = f"{safe_channel} - {safe_title}"
+            else:
+                base_name = safe_title
+            
+            if len(found_files) > 1:
+                # Try to extract index from filename if possible
+                fname = os.path.basename(file_path)
+                try:
+                    # job_id_1.mp4 -> 1
+                    idx_part = fname.replace(job_id + '_', '').split('.')[0]
+                    new_filename = f"{base_name}_{idx_part}{ext}"
+                except:
+                    new_filename = f"{base_name}_{os.path.basename(file_path)}{ext}"
+            else:
+                new_filename = f"{base_name}{ext}"
+
+            dest_path = os.path.join(DOWNLOAD_DIR, new_filename)
+            
+            # Handle collision
+            counter = 1
+            base_dest = os.path.splitext(dest_path)[0]
+            while os.path.exists(dest_path):
+                dest_path = f"{base_dest}_{counter}{ext}"
+                counter += 1
+            
+            shutil.move(file_path, dest_path)
+            final_filenames.append(os.path.basename(dest_path))
+            logging.info(f"Moved {file_path} to {dest_path}")
+
+        job.filename = final_filenames[0] # Set the first one as main
+        job.status = JobStatus.FINISHED
+        logging.info(f"Job {job_id} completed. Filename: {job.filename}")
+        
+        # Record owner
+        if job.username:
+                db_utils.add_file_owner(job.filename, job.username)
+                # Handle bulk parts if distinct? Assuming single file or playlist.
+                for fname in final_filenames[1:]:
+                    db_utils.add_file_owner(fname, job.username)
         
     except Exception as e:
 
