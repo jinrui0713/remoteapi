@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.11")
+app = FastAPI(title="yt-dlp API Server", version="8.2.12")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -142,17 +142,20 @@ LIMITS = {
     'user': { # Shared account
         'download_limit': 1, # per hour
         'proxy_limit': 0,    # per hour (disabled)
-        'speed_limit': 0.8   # MB/s (800KB/s)
+        'speed_limit': 0.8,  # MB/s (800KB/s)
+        'session_duration': 86400 * 1 # 1 day
     },
     'personal': { # Created via registration
         'download_limit': 5, # per hour (includes playlist)
         'proxy_limit': 50,
-        'speed_limit': 2.0   # MB/s
+        'speed_limit': 2.0,  # MB/s
+        'session_duration': 86400 * 7 # 7 days
     },
     'admin': {
         'download_limit': 9999,
         'proxy_limit': 9999,
-        'speed_limit': 0 # Unlimited
+        'speed_limit': 0, # Unlimited
+        'session_duration': 86400 * 30 # 30 days
     }
 }
 
