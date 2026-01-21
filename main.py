@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.7")
+app = FastAPI(title="yt-dlp API Server", version="8.3.8")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -527,15 +527,14 @@ def run_download(job_id: str, req: DownloadRequest):
             'preferredquality': '192',
         }]
     else:
-        # Video format - FORCE H.264 (avc1) for maximum compatibility
+        # Video format - Use simpler selector with sorting preferences for stability
         ydl_opts['merge_output_format'] = 'mp4'
+        ydl_opts['format_sort'] = ['res', 'vcodec:h264', 'acodec:aac', 'ext:mp4']
         
-        # Prioritize AVC(h.264) video + AAC audio. Fallback to best mp4, then best.
-        # This selector tries to find video with codec starting with 'avc' (h264)
         if req.quality == 'best':
-            ydl_opts['format'] = 'bestvideo[vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+            ydl_opts['format'] = 'bestvideo+bestaudio/best'
         else:
-            ydl_opts['format'] = f'bestvideo[vcodec^=avc][height<={req.quality}]+bestaudio[ext=m4a]/bestvideo[height<={req.quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={req.quality}][ext=mp4]/best[height<={req.quality}]'
+            ydl_opts['format'] = f'bestvideo[height<={req.quality}]+bestaudio/best[height<={req.quality}]'
 
     try:
         # Wrapper to allow retry logic
