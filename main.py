@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.3")
+app = FastAPI(title="yt-dlp API Server", version="8.3.4")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -545,9 +545,18 @@ def run_download(job_id: str, req: DownloadRequest):
             if ("Sign in to confirm" in err_msg or "downloaded file is empty" in err_msg) and 'cookiefile' in ydl_opts:
                 logging.warning(f"Download error detected ({err_msg}). Retrying with browser cookies (Chrome/Edge)...")
                 # Fallback: Remove file and use browser. Removed Firefox to avoid keyring issues.
-                del ydl_opts['cookiefile']
-                ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge')
-                info = attempt_download(ydl_opts)
+                try: 
+                    # Only attempt if not running as system/service to avoid crash
+                    if 'systemprofile' not in os.path.expanduser('~').lower():
+                        del ydl_opts['cookiefile']
+                        ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge')
+                        info = attempt_download(ydl_opts)
+                    else:
+                        logging.error("Cannot use browser cookies in system profile. Please check cookies.txt.")
+                        raise e
+                except Exception as ex:
+                    logging.error(f"Browser cookie fallback failed: {ex}")
+                    raise e
             else:
                 raise e
             
@@ -655,8 +664,8 @@ async def stream_video(url: str, request: Request):
         cookies_path = os.path.join(execution_dir, 'cookies.txt')
         if os.path.exists(cookies_path):
             ydl_opts['cookiefile'] = cookies_path
-        else:
-             ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox')
+        
+        # Note: Do not use cookiesfrombrowser here to avoid system profile errors.
         
         # Determine Speed Limit
         token = request.cookies.get(AUTH_COOKIE_NAME)
