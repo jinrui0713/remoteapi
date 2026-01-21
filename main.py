@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.4")
+app = FastAPI(title="yt-dlp API Server", version="8.3.5")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -472,7 +472,12 @@ def run_download(job_id: str, req: DownloadRequest):
         'writethumbnail': False,
         'restrictfilenames': True, 
         'windowsfilenames': True,
-        'noplaylist': False, # Changed to False to allow playlist if requested (see below logic)
+        'noplaylist': False,
+        # Improve stability
+        'cachedir': False, # Disable cache to prevent stale auth issues
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'nocheckcertificate': True,
+        'ignoreerrors': True, # Continue playlist even if one fails
     }
     
     # Cookie handling: Prioritize cookies.txt
@@ -658,7 +663,12 @@ async def stream_video(url: str, request: Request):
     Get direct stream URL from yt-dlp and proxy it.
     """
     try:
-        ydl_opts = {'format': 'best', 'quiet': True}
+        ydl_opts = {
+            'format': 'best', 
+            'quiet': True,
+            'cachedir': False,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
         
         # Cookie handling
         cookies_path = os.path.join(execution_dir, 'cookies.txt')
