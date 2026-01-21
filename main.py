@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.1")
+app = FastAPI(title="yt-dlp API Server", version="8.3.2")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -245,10 +245,11 @@ def check_auth(request: Request):
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
-    # Relaxed CSP for usage 
-    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; img-src 'self' data: https: blob:; media-src 'self' blob: https: data:;"
-    # Clear potentially problematic Permissions-Policy features
-    response.headers["Permissions-Policy"] = "interest-cohort=(), browsing-topics=(), run-ad-auction=(), join-ad-interest-group=(), private-state-token-redemption=(), private-state-token-issuance=(), private-aggregation=(), attribution-reporting=()"
+    # Extremely permissive CSP to allow proxied content and external scripts
+    response.headers["Content-Security-Policy"] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+    # Remove Permissions-Policy to avoid "Unrecognized feature" errors and blocking legitimate features
+    if "Permissions-Policy" in response.headers:
+        del response.headers["Permissions-Policy"]
     return response
 
 # Middleware for Auth & Load Limit
@@ -478,9 +479,9 @@ def run_download(job_id: str, req: DownloadRequest):
     cookies_path = os.path.join(execution_dir, 'cookies.txt')
     if os.path.exists(cookies_path):
         ydl_opts['cookiefile'] = cookies_path
-    else:
-        # Fallback to browser cookies only if cookies.txt is missing
-        ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox')
+    
+    # NOTE: "cookiesfrombrowser" removed to prevent errors on servers/services without browser profiles.
+    # Users must provide cookies.txt if cookies are needed.
     
     if limit_rate:
         ydl_opts['ratelimit'] = limit_rate
