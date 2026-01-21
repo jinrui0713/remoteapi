@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.0")
+app = FastAPI(title="yt-dlp API Server", version="8.3.1")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -240,6 +240,16 @@ def check_auth(request: Request):
         return False
         
     return True
+
+# Security Headers Middleware
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # Relaxed CSP for usage 
+    response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; img-src 'self' data: https: blob:; media-src 'self' blob: https: data:;"
+    # Clear potentially problematic Permissions-Policy features
+    response.headers["Permissions-Policy"] = "interest-cohort=(), browsing-topics=(), run-ad-auction=(), join-ad-interest-group=(), private-state-token-redemption=(), private-state-token-issuance=(), private-aggregation=(), attribution-reporting=()"
+    return response
 
 # Middleware for Auth & Load Limit
 @app.middleware("http")
@@ -462,9 +472,15 @@ def run_download(job_id: str, req: DownloadRequest):
         'restrictfilenames': True, 
         'windowsfilenames': True,
         'noplaylist': False, # Changed to False to allow playlist if requested (see below logic)
-        # Automatic Cookie Handling: try to load from browser if cookies.txt is missing
-        'cookiesfrombrowser': ('chrome', 'edge', 'firefox'),
     }
+    
+    # Cookie handling: Prioritize cookies.txt
+    cookies_path = os.path.join(execution_dir, 'cookies.txt')
+    if os.path.exists(cookies_path):
+        ydl_opts['cookiefile'] = cookies_path
+    else:
+        # Fallback to browser cookies only if cookies.txt is missing
+        ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox')
     
     if limit_rate:
         ydl_opts['ratelimit'] = limit_rate
@@ -633,6 +649,13 @@ async def stream_video(url: str, request: Request):
     """
     try:
         ydl_opts = {'format': 'best', 'quiet': True}
+        
+        # Cookie handling
+        cookies_path = os.path.join(execution_dir, 'cookies.txt')
+        if os.path.exists(cookies_path):
+            ydl_opts['cookiefile'] = cookies_path
+        else:
+             ydl_opts['cookiesfrombrowser'] = ('chrome', 'edge', 'firefox')
         
         # Determine Speed Limit
         token = request.cookies.get(AUTH_COOKIE_NAME)
