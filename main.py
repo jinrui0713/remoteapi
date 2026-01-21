@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.5")
+app = FastAPI(title="yt-dlp API Server", version="8.3.6")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -477,7 +477,6 @@ def run_download(job_id: str, req: DownloadRequest):
         'cachedir': False, # Disable cache to prevent stale auth issues
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'nocheckcertificate': True,
-        'ignoreerrors': True, # Continue playlist even if one fails
     }
     
     # Cookie handling: Prioritize cookies.txt
@@ -512,6 +511,7 @@ def run_download(job_id: str, req: DownloadRequest):
     if "playlist?list=" in req.url:
         logging.info(f"Explicit playlist URL detected: {req.url}. Enabling playlist mode (limit 10).")
         ydl_opts['noplaylist'] = False
+        ydl_opts['ignoreerrors'] = True
         ydl_opts['playlistend'] = 10
         # For playlist, we need unique filenames
         ydl_opts['outtmpl'] = os.path.join(TEMP_DIR, f'{job_id}_%(playlist_index)s.%(ext)s')
@@ -566,8 +566,10 @@ def run_download(job_id: str, req: DownloadRequest):
                 raise e
             
         # Update title from final info
-        job.title = info.get('title', job.title)
-        channel_name = info.get('channel', 'UnknownChannel')
+        channel_name = 'UnknownChannel'
+        if info:
+            job.title = info.get('title', job.title)
+            channel_name = info.get('channel', 'UnknownChannel')
 
         # Find the downloaded file(s)
         found_files = []
