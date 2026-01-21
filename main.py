@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.8")
+app = FastAPI(title="yt-dlp API Server", version="8.3.9")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -474,9 +474,11 @@ def run_download(job_id: str, req: DownloadRequest):
         'windowsfilenames': True,
         'noplaylist': False,
         # Improve stability
-        'cachedir': False, # Disable cache to prevent stale auth issues
+        'cachedir': False, 
         'nocheckcertificate': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'sleep_interval': 3,
+        'max_sleep_interval': 10,
     }
     
     # Cookie handling: Prioritize cookies.txt
@@ -668,7 +670,7 @@ async def stream_video(url: str, request: Request):
             'format': 'best', 
             'quiet': True,
             'cachedir': False,
-            'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         }
         
         # Cookie handling
