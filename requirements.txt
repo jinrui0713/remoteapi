@@ -82,7 +82,6 @@ pyannote.metrics==3.2.1
 pyannote.pipeline==3.0.1
 pyasn1==0.6.1
 pycparser==2.22
-pycryptodome==3.19.0
 pycryptodomex==3.19.0
 pyee==11.1.0
 Pygments==2.19.2

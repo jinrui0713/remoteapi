@@ -14,7 +14,19 @@ from fastapi.responses import StreamingResponse
 import db_utils
 
 # Configuration
-PROXY_KEY = secrets.token_bytes(32) # In production, this should be persistent
+# Persistent Key Loading
+KEY_FILE = os.path.join(os.environ.get('LOCALAPPDATA', os.getcwd()), 'YtDlpApiServer', 'proxy.key')
+if not os.path.exists(os.path.dirname(KEY_FILE)):
+    os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
+
+if os.path.exists(KEY_FILE):
+    with open(KEY_FILE, 'rb') as f:
+        PROXY_KEY = f.read()
+else:
+    PROXY_KEY = secrets.token_bytes(32)
+    with open(KEY_FILE, 'wb') as f:
+        f.write(PROXY_KEY)
+
 DEFAULT_MAX_SPEED_BPS = 1024 * 1024 # 1MB/s (Throttled speed)
 DEFAULT_BURST_THRESHOLD_BPS = 1.5 * 1024 * 1024 # 1.5MB/s (Trigger threshold)
 BURST_DURATION = 2.0 # Seconds
@@ -622,7 +634,7 @@ class ProxyService:
             
             if "text/html" in content_type:
                 # Buffer HTML for rewriting
-                content = await response.read()
+                content = await response.aread()
                 total_bytes = len(content)
                 
                 # Use the centralized rewriter
@@ -637,7 +649,7 @@ class ProxyService:
 
             elif "text/css" in content_type:
                 # Buffer CSS for rewriting
-                content = await response.read()
+                content = await response.aread()
                 total_bytes = len(content)
                 
                 encoding = response.encoding or 'utf-8'

@@ -1,0 +1,17 @@
+2026-01-21 20:08:37,653 - INFO - Starting server initialization...
+2026-01-21 20:08:38,902 - INFO - Dependencies imported successfully.
+2026-01-21 20:08:38,905 - INFO - Found ffmpeg at: C:\Users\Shogo\AppData\Local\YtDlpApiServer\bin\ffmpeg.exe
+C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\main.py:349: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+2026-01-21 20:08:39,010 - INFO - Starting uvicorn server on port 8000...
+2026-01-21 20:08:39,026 - INFO - Available IP addresses: ['172.28.224.1', '192.168.137.1', '192.168.0.14']
+2026-01-21 20:08:39,053 - INFO - Started server process [28940]
+2026-01-21 20:08:39,054 - INFO - Waiting for application startup.
+2026-01-21 20:08:39,055 - INFO - Application startup complete.
+2026-01-21 20:08:39,056 - INFO - Cleanup completed
+2026-01-21 20:08:39,057 - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

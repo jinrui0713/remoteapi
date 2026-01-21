@@ -1,0 +1,21 @@
+2026-01-21 22:12:46,641 - INFO - Starting server initialization...
+2026-01-21 22:12:47,749 - INFO - Dependencies imported successfully.
+2026-01-21 22:12:47,752 - INFO - Found ffmpeg at: C:\Users\Shogo\AppData\Local\YtDlpApiServer\bin\ffmpeg.exe
+2026-01-21 22:12:47,828 - INFO - Starting uvicorn server on port 8000...
+2026-01-21 22:12:47,841 - INFO - Available IP addresses: ['172.28.224.1', '192.168.137.1', '192.168.0.14']
+2026-01-21 22:12:47,861 - INFO - Started server process [7336]
+2026-01-21 22:12:47,862 - INFO - Waiting for application startup.
+2026-01-21 22:12:47,863 - INFO - Application startup complete.
+2026-01-21 22:12:47,864 - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-01-21 22:12:47,864 - INFO - Cleanup completed
+2026-01-21 22:12:50,604 - INFO - 127.0.0.1:64285 - "GET /system/info HTTP/1.1" 200
+2026-01-21 22:12:50,624 - INFO - 127.0.0.1:64285 - "POST /api/login HTTP/1.1" 200
+2026-01-21 22:12:50,633 - INFO - 127.0.0.1:64285 - "GET /system/info HTTP/1.1" 200
+2026-01-21 22:12:50,636 - INFO - 127.0.0.1:64285 - "POST /api/proxy/encrypt HTTP/1.1" 401
+2026-01-21 22:12:50,643 - INFO - Starting job 3c765988-e4d8-4cfb-8d19-a67522511b63: https://www.youtube.com/watch?v=jNQXAC9IVRw (Limit: None)
+2026-01-21 22:12:50,643 - INFO - Using cookies from C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\cookies.txt
+2026-01-21 22:12:50,648 - INFO - 127.0.0.1:64285 - "POST /download HTTP/1.1" 200
+2026-01-21 22:12:50,651 - INFO - 127.0.0.1:64285 - "GET /jobs/3c765988-e4d8-4cfb-8d19-a67522511b63 HTTP/1.1" 307
+2026-01-21 22:12:50,719 - INFO - 127.0.0.1:64285 - "GET /static/login.html HTTP/1.1" 200
+[download]   0.2% of  422.93KiB at  499.32KiB/s ETA 00:00[download]   0.7% of  422.93KiB at  749.96KiB/s ETA 00:00[download]   1.7% of  422.93KiB at    1.71MiB/s ETA 00:00[download]   3.5% of  422.93KiB at    2.93MiB/s ETA 00:00[download]   7.3% of  422.93KiB at    3.78MiB/s ETA 00:00[download]  14.9% of  422.93KiB at    4.40MiB/s ETA 00:00[download]  30.0% of  422.93KiB at    5.89MiB/s ETA 00:00[download]  60.3% of  422.93KiB at    7.53MiB/s ETA 00:00[download] 100.0% of  422.93KiB at    8.58MiB/s ETA 00:00[download] 100% of  422.93KiB in 00:00:00 at 3.53MiB/s                                                         [download]   0.3% of  302.04KiB at  997.22KiB/s ETA 00:00[download]   1.0% of  302.04KiB at  927.12KiB/s ETA 00:00[download]   2.3% of  302.04KiB at    1.61MiB/s ETA 00:00[download]   5.0% of  302.04KiB at    2.79MiB/s ETA 00:00[download]  10.3% of  302.04KiB at    1.43MiB/s ETA 00:00[download]  20.9% of  302.04KiB at    1.61MiB/s ETA 00:00[download]  42.0% of  302.04KiB at    2.09MiB/s ETA 00:00[download]  84.4% of  302.04KiB at    3.07MiB/s ETA 00:00[download] 100.0% of  302.04KiB at    2.72MiB/s ETA 00:00[download] 100% of  302.04KiB in 00:00:00 at 1.26MiB/s                                                         2026-01-21 22:12:54,964 - INFO - Moved C:\Users\Shogo\AppData\Local\YtDlpApiServer\temp\3c765988-e4d8-4cfb-8d19-a67522511b63.mp4 to C:\Users\Shogo\AppData\Local\YtDlpApiServer\downloads\jawed - Me at the zoo.mp4
+2026-01-21 22:12:54,965 - INFO - Job 3c765988-e4d8-4cfb-8d19-a67522511b63 completed. Filename: jawed - Me at the zoo.mp4

@@ -441,6 +441,16 @@ def get_file_owners() -> Dict[str, str]:
         print(f"DB Error (Get File Owners): {e}")
         return {}
 
+def remove_file_owner(filename: str):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("DELETE FROM file_owners WHERE filename = ?", (filename,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"DB Error (Remove File Owner): {e}")
+
 def check_username_exists(username: str) -> bool:
     try:
         conn = sqlite3.connect(DB_PATH)

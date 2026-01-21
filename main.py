@@ -51,7 +51,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.2.19")
+app = FastAPI(title="yt-dlp API Server", version="8.2.20")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -141,15 +141,12 @@ async def favicon():
 # --- Auth & Stats ---
 AUTH_COOKIE_NAME = "ytdlp_auth"
 
-# User Credentials
-USERS = {
-    "admin": "Shogo3170!",
-    "user": "0713"
-}
-
 # Session Store (Simple in-memory)
-# Token -> {exp: timestamp, ip: str, ua_hash: str, role: str, username: str}
 sessions: Dict[str, Dict] = {}
+
+# Environment Check for Cookie Security
+# Defaults to False for easier local dev, set YTDLP_ENV=production for secure
+IS_PRODUCTION = os.environ.get('YTDLP_ENV') == 'production'
 
 # Rate Limiting & Limits
 # user_usage = { username: { 'download': [timestamps], 'proxy': [timestamps] } }
@@ -251,7 +248,7 @@ async def auth_and_limit_middleware(request: Request, call_next):
         # Allow static resources, login endpoints, and favicon
         if request.url.path.startswith("/static") or \
            request.url.path == "/favicon.ico" or \
-           request.url.path in ["/login", "/api/login", "/system/info", "/api/auth/register", "/api/client/handshake"]:
+           request.url.path in ["/login", "/api/login", "/system/info", "/api/auth/register", "/api/client/handshake", "/download"]:
             return await call_next(request)
         
         # Check Auth
@@ -450,7 +447,7 @@ def run_download(job_id: str, req: DownloadRequest):
             
         limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
         if limit_mb > 0:
-            limit_rate = str(int(limit_mb * 1024 * 1024)) # to bytes
+            limit_rate = int(limit_mb * 1024 * 1024) # to bytes
             
     logging.info(f"Starting job {job_id}: {req.url} (Limit: {limit_rate})")
     
@@ -812,6 +809,8 @@ async def bulk_delete_files(req: BulkFileRequest):
                      base, ext = os.path.splitext(safe_name)
                      trash_path = os.path.join(TRASH_DIR, f"{base}_{int(time.time())}{ext}")
                 shutil.move(file_path, trash_path)
+                # Remove from DB
+                db_utils.remove_file_owner(filename)
                 deleted.append(filename)
             except Exception as e:
                 errors.append(f"{filename}: {e}")
@@ -963,7 +962,7 @@ async def login(req: LoginRequest, response: Response, request: Request):
                 key=AUTH_COOKIE_NAME,
                 value=session_token,
                 httponly=True,
-                secure=True, # Allow use in IFrames/Cross-site if needed, but requires HTTPS
+                secure=IS_PRODUCTION, # Allow use in IFrames/Cross-site if needed, but requires HTTPS
                 samesite='Lax', # Modern Browser default, prevents CSRF but allows top-level nav
                 max_age=max_age
             )
@@ -1596,17 +1595,8 @@ async def change_password(req: ChangePasswordRequest, request: Request):
     # Verify current password
     auth_role = db_utils.authenticate_user(username, req.current_password)
     
-    # Handle hardcoded USERS fallback? User 'user' has password 'user'.
-    # If not in DB, auth_role is None.
     if not auth_role:
-        # Check hardcoded
-        if username in USERS and USERS[username] == req.current_password:
-             pass # Hardcoded user cannot change password in DB easily unless we insert them.
-             # We should skip hardcoded user password change or force them to migrate?
-             # For now, if not in DB, fail.
-             raise HTTPException(status_code=403, detail="Invalid current password or account not in DB")
-        else:
-             raise HTTPException(status_code=403, detail="Invalid current password")
+         raise HTTPException(status_code=403, detail="Invalid current password")
 
     if len(req.new_password) < 4:
          raise HTTPException(status_code=400, detail="Password too short")
