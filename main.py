@@ -24,6 +24,7 @@ try:
     from pydantic import BaseModel
     import yt_dlp
     import uvicorn
+    import httpx
     import socket
     import uuid
     import time
@@ -51,7 +52,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.10")
+app = FastAPI(title="yt-dlp API Server", version="8.3.11")
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -640,10 +641,96 @@ def run_download(job_id: str, req: DownloadRequest):
                     db_utils.add_file_owner(fname, job.username)
         
     except Exception as e:
+        # Fallback attempt
+        logging.error(f"yt-dlp failed: {e}. Attempting Fallback...")
+        fallback_info = attempt_fallback_download(req.url, job_id)
+        if fallback_info:
+            logging.info("Fallback download successful. Processing file...")
+            # Simulate info dict
+            info = {'title': fallback_info['title']} 
+            channel_name = "ExternalSource"
+            # Re-run file find and move logic
+            # This is duplicate code but cleanest without Refactoring entire function now
+            found_files = []
+            if os.path.exists(TEMP_DIR):
+                for f in os.listdir(TEMP_DIR):
+                    if f.startswith(job_id):
+                        found_files.append(os.path.join(TEMP_DIR, f))
+            
+            if found_files:
+                 from yt_dlp.utils import sanitize_filename
+                 safe_title = sanitize_filename(info['title'])
+                 # Move Logic
+                 dest_path = os.path.join(DOWNLOAD_DIR, safe_title + "." + fallback_info['ext'])
+                 counter = 1
+                 while os.path.exists(dest_path):
+                     dest_path = os.path.join(DOWNLOAD_DIR, f"{safe_title}_{counter}.{fallback_info['ext']}")
+                     counter += 1
+                 
+                 shutil.move(found_files[0], dest_path)
+                 job.filename = os.path.basename(dest_path)
+                 job.status = JobStatus.FINISHED
+                 job.title = info['title']
+                 if job.username: db_utils.add_file_owner(job.filename, job.username)
+                 return
 
         job.status = JobStatus.ERROR
-        job.error_msg = str(e)
-        logging.error(f"Job {job_id} failed: {e}")
+        job.error_msg = f"Download Failed: {str(e)} (And fallback failed)"
+        logging.error(f"Job {job_id} completely failed.")
+
+def attempt_fallback_download(url: str, job_id: str):
+    """Fallback using Cobalt API when yt-dlp fails"""
+    logging.info(f"Using Fallback API (Cobalt) for {job_id}")
+    job = jobs.get(job_id)
+    if not job: return False
+
+    try:
+        api_url = "https://api.cobalt.tools/api/json"
+        headers = {
+            "Accept": "application/json", 
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        payload = {"url": url}
+        
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(api_url, json=payload, headers=headers)
+            if resp.status_code != 200:
+                logging.error(f"Fallback API Error: {resp.status_code} - {resp.text}")
+                return False
+            
+            data = resp.json()
+            download_url = data.get('url')
+            if not download_url:
+                logging.error("Fallback API no URL")
+                return False
+                
+            # Download the actual file
+            logging.info(f"Fallback URL obtained: {download_url[:30]}...")
+            
+            # Determine extension
+            ext = 'mp4' # Default
+            if 'audio' in str(data.get('filename', '')): ext = 'mp3'
+            
+            temp_path = os.path.join(TEMP_DIR, f"{job_id}.{ext}")
+            
+            with client.stream("GET", download_url) as r:
+                r.raise_for_status()
+                total = int(r.headers.get('content-length', 0))
+                downloaded = 0
+                with open(temp_path, 'wb') as f:
+                    for chunk in r.iter_bytes(chunk_size=65536):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                             job.progress = round((downloaded / total) * 100, 1)
+
+            # Metadata?
+            return {'title': data.get('filename', f'Fallback-{job_id}'), 'ext': ext}
+            
+    except Exception as e:
+        logging.error(f"Fallback Exception: {e}")
+        return False
 
 # --- API Endpoints ---
 
