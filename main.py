@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.13")
+app = FastAPI(title="yt-dlp API Server", version="8.3.15")
 
 @app.on_event("startup")
 async def startup_event():
@@ -710,93 +710,161 @@ def run_download(job_id: str, req: DownloadRequest):
         logging.error(f"Job {job_id} completely failed.")
 
 def attempt_fallback_download(url: str, job_id: str):
-    """Fallback using Cobalt API when yt-dlp fails"""
-    logging.info(f"Using Fallback API (Cobalt) for {job_id}")
+    """Fallback using Cobalt API -> SaveFrom.net -> Y2Mate when yt-dlp fails"""
+    logging.info(f"Using Fallback Chain for {job_id}")
     job = jobs.get(job_id)
     if not job: return False
 
-    # Try multiple instances (V10 API)
-    instances = [
-        "https://cobalt-api.kwiatekmiki.com", # Verified working (V10)
-        "https://api.cobalt.tools",             # Official (Might require Auth)
-        "https://cobalt.api.kwiatekmiki.pl"     # Old domain (backup)
+    # --- Strategy 1: Cobalt API (V10) ---
+    cobalt_instances = [
+        "https://cobalt-api.kwiatekmiki.com",
+        "https://api.cobalt.tools",    
+        "https://cobalt.api.kwiatekmiki.pl"
     ]
-
+    
     headers = {
         "Accept": "application/json", 
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    # V10 Payload
-    payload = {
-        "url": url, 
-        "videoQuality": "max", 
-        "filenameStyle": "basic"
-    }
 
-    for base_url in instances:
+    # Try Cobalt Instances
+    for base_url in cobalt_instances:
         try:
-            # Construct V10 endpoint (POST /)
             api_url = base_url.rstrip('/') + "/"
+            logging.info(f"Trying Cobalt Instance: {api_url}")
             
-            logging.info(f"Trying Fallback Instance: {api_url}")
-            with httpx.Client(timeout=60.0) as client:
+            payload = {"url": url, "videoQuality": "max", "filenameStyle": "basic"}
+            
+            with httpx.Client(timeout=30.0) as client:
                 resp = client.post(api_url, json=payload, headers=headers)
-                
-                # Check 404/400 explicitly
                 if resp.status_code not in [200, 201]:
-                    logging.error(f"Instance {api_url} Error: {resp.status_code} - {resp.text}")
-                    continue # Try next
+                    logging.error(f"Cobalt {api_url} Error: {resp.status_code} - {resp.text}")
+                    continue 
                 
                 data = resp.json()
-                
-                # Handle V10 Response types
                 status = data.get('status')
                 download_url = None
                 
                 if status in ['tunnel', 'redirect']:
                     download_url = data.get('url')
-                elif status == 'picker':
-                    # If picker, just take the first item's url
-                    if data.get('picker') and len(data['picker']) > 0:
-                        download_url = data['picker'][0].get('url')
+                elif status == 'picker' and data.get('picker'):
+                    download_url = data['picker'][0].get('url')
                 elif 'url' in data:
-                    # Legacy or implicit
                     download_url = data.get('url')
 
-                if not download_url:
-                    logging.error(f"Instance {api_url} No URL returned (Status: {status})")
-                    continue
+                if download_url:
+                    logging.info(f"Cobalt URL obtained: {download_url[:30]}...")
+                    return process_generic_download(download_url, job_id, client, data.get('filename'), 'mp4')
                     
-                # Download the actual file
-                logging.info(f"Fallback URL obtained from {api_url}: {download_url[:30]}...")
-                
-                # Determine extension
-                ext = 'mp4' # Default
-                # V10 might omit filename, try to guess from connection or data
-                if 'audio' in str(data.get('filename', '')) or 'audio' in str(status): 
-                    ext = 'mp3'
-                
-                temp_path = os.path.join(TEMP_DIR, f"{job_id}.{ext}")
-                
-                with client.stream("GET", download_url) as r:
-                    r.raise_for_status()
-                    total = int(r.headers.get('content-length', 0))
-                    downloaded = 0
-                    with open(temp_path, 'wb') as f:
-                        for chunk in r.iter_bytes(chunk_size=65536):
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total:
-                                job.progress = round((downloaded / total) * 100, 1)
-
-                # Metadata?
-                return {'title': data.get('filename', f'Fallback-{job_id}'), 'ext': ext}
         except Exception as ex:
-             logging.error(f"Instance {api_url} Exception: {ex}")
+             logging.error(f"Cobalt {api_url} Exception: {ex}")
              continue
+             
+    # --- Strategy 2: SaveFrom.net (Worker API) ---
+    try:
+        logging.info("Trying SaveFrom.net Fallback...")
+        sf_url = "https://worker.sf-tools.com/savefrom/q"
+        sf_headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Origin": "https://en.savefrom.net",
+            "Referer": "https://en.savefrom.net/"
+        }
+        sf_data = {
+            "sf_url": url, "sf_submit": "", "new": 2, "lang": "en", "app": "", 
+            "country": "us", "os": "Windows", "browser": "Chrome", "channel": " main", "sf-nomad": 1
+        }
+        
+        with httpx.Client(timeout=30.0) as client:
+            resp = client.post(sf_url, headers=sf_headers, data=sf_data)
+            if resp.status_code == 200:
+                data = resp.json()
+                # Parse result
+                best_url = None
+                if 'url' in data and isinstance(data['url'], list):
+                     # Find best mp4
+                     for item in data['url']:
+                         if item.get('ext') == 'mp4':
+                             best_url = item.get('url')
+                             break # Take first (usually best)
+                
+                if best_url:
+                     logging.info(f"SaveFrom URL obtained: {best_url[:30]}...")
+                     return process_generic_download(best_url, job_id, client, f"SaveFrom_{job_id}", 'mp4')
+            else:
+                logging.error(f"SaveFrom Error: {resp.status_code}")
+    except Exception as ex:
+        logging.error(f"SaveFrom Exception: {ex}")
+
+    # --- Strategy 3: Y2Mate (Clone) ---
+    try:
+        logging.info("Trying Y2Mate Fallback...")
+        # Note: Domains change often.
+        y2_domain = "https://en1.y2mate.is" 
+        analyze_url = f"{y2_domain}/analyze"
+        convert_url = f"{y2_domain}/convert"
+        
+        y2_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Referer": y2_domain,
+            "Origin": y2_domain
+        }
+        
+        with httpx.Client(timeout=30.0) as client:
+            # Step 1: Analyze
+            # Try both k_query and url
+            resp1 = client.post(analyze_url, data={"k_query": url, "k_page": "home", "hl": "en", "q_auto": 0}, headers=y2_headers)
+            if resp1.status_code == 200:
+                d1 = resp1.json()
+                if 'vid' in d1 and 'links' in d1 and 'mp4' in d1['links']:
+                    vid = d1['vid']
+                    # Get first available quality key
+                    k_key = None
+                    for key, val in d1['links']['mp4'].items():
+                        if val.get('k'): 
+                            k_key = val['k']
+                            break
+                    
+                    if k_key:
+                        # Step 2: Convert
+                        time.sleep(1) # Polite delay
+                        resp2 = client.post(convert_url, data={"vid": vid, "k": k_key}, headers=y2_headers)
+                        if resp2.status_code == 200:
+                            d2 = resp2.json()
+                            if d2.get('status') == 'ok' and d2.get('dlink'):
+                                dlink = d2['dlink']
+                                logging.info(f"Y2Mate URL obtained: {dlink[:30]}...")
+                                return process_generic_download(dlink, job_id, client, d2.get('title', f"Y2Mate_{job_id}"), 'mp4')
+
+    except Exception as ex:
+        logging.error(f"Y2Mate Exception: {ex}")
 
     return False
+
+def process_generic_download(download_url, job_id, client, filename_hint, ext):
+    """Helper to download file from a direct link"""
+    # Create temp path
+    # If generic, we default to mp4
+    temp_path = os.path.join(TEMP_DIR, f"{job_id}.{ext}")
+    job = jobs.get(job_id)
+    
+    try:
+        with client.stream("GET", download_url) as r:
+            r.raise_for_status()
+            total = int(r.headers.get('content-length', 0))
+            downloaded = 0
+            with open(temp_path, 'wb') as f:
+                for chunk in r.iter_bytes(chunk_size=65536):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total and job:
+                        job.progress = round((downloaded / total) * 100, 1)
+        
+        return {'title': filename_hint, 'ext': ext}
+    except Exception as e:
+        logging.error(f"Generic Download Failed for {job_id}: {e}")
+        return False
 
 # --- API Endpoints ---
 
