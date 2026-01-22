@@ -52,7 +52,37 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.12")
+
+# --- Real-time Log Streaming Setup ---
+log_queues: List[asyncio.Queue] = []
+LOG_LOOP = None
+
+class SSELogHandler(logging.Handler):
+    """Log handler that broadcasts messages to connected SSE clients"""
+    def emit(self, record):
+        global LOG_LOOP
+        if LOG_LOOP is None or LOG_LOOP.is_closed():
+            return
+        try:
+            msg = self.format(record)
+            for q in list(log_queues):
+                LOG_LOOP.call_soon_threadsafe(q.put_nowait, msg)
+        except Exception:
+            pass
+
+# Add this handler to root logger
+sse_handler = SSELogHandler()
+sse_handler.setLevel(logging.INFO)
+sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(sse_handler)
+
+@app.on_event("startup")
+async def startup_event():
+    global LOG_LOOP
+    LOG_LOOP = asyncio.get_running_loop()
+
+app = FastAPI(title="yt-dlp API Server", version="8.3.13")
+
 
 # --- Middleware for Bandwidth & Fingerprinting ---
 @app.middleware("http")
@@ -739,6 +769,33 @@ def attempt_fallback_download(url: str, job_id: str):
     return False
 
 # --- API Endpoints ---
+
+
+@app.get("/api/logs/stream")
+async def stream_logs(request: Request):
+    """Stream server logs via Server-Sent Events"""
+    q = asyncio.Queue()
+    log_queues.append(q)
+    try:
+        async def event_generator():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    # Wait for new log
+                    data = await q.get()
+                    yield f"data: {data}\n\n"
+            except asyncio.CancelledError:
+                pass
+            finally:
+                if q in log_queues:
+                    log_queues.remove(q)
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+    except Exception:
+        if q in log_queues:
+            log_queues.remove(q)
+        return Response("Stream Error", status_code=500)
 
 @app.get("/")
 async def index():

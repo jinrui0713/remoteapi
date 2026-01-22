@@ -2691,5 +2691,27 @@
             }
         }).mount('#app');
     </script>
+    <script>
+        // Server Log Streaming to Console
+        (function() {
+            if (!window.EventSource) return;
+            console.log("%c Connecting to Server Log Stream...", "color: #3498db; font-weight: bold;");
+            
+            function connectLogStream() {
+                const logSource = new EventSource("/api/logs/stream");
+                
+                logSource.onmessage = function(event) {
+                    console.log(`%c[SERVER] ${event.data}`, "color: #10ac84; font-family: monospace;");
+                };
+                
+                logSource.onerror = function(err) {
+                    // console.debug("Log Stream disconnected. Reconnecting in 5s...");
+                    logSource.close();
+                    setTimeout(connectLogStream, 5000);
+                };
+            }
+            connectLogStream();
+        })();
+    </script>
 </body>
 </html>
