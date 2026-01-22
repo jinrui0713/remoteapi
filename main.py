@@ -65,6 +65,10 @@ class SSELogHandler(logging.Handler):
             return
         try:
             msg = self.format(record)
+            # Reduce Noise: Filter common access logs
+            if '"GET /system/info' in msg or '"GET /jobs' in msg or '"GET /files' in msg or '"GET /download' in msg:
+                return
+            
             for q in list(log_queues):
                 LOG_LOOP.call_soon_threadsafe(q.put_nowait, msg)
         except Exception:
@@ -76,12 +80,12 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
+app = FastAPI(title="yt-dlp API Server", version="8.3.13")
+
 @app.on_event("startup")
 async def startup_event():
     global LOG_LOOP
     LOG_LOOP = asyncio.get_running_loop()
-
-app = FastAPI(title="yt-dlp API Server", version="8.3.13")
 
 
 # --- Middleware for Bandwidth & Fingerprinting ---
@@ -711,11 +715,11 @@ def attempt_fallback_download(url: str, job_id: str):
     job = jobs.get(job_id)
     if not job: return False
 
-    # Try multiple instances
+    # Try multiple instances (V10 API)
     instances = [
-        "https://api.cobalt.tools/api/json",
-        "https://co.wuk.sh/api/json",
-        "https://cobalt.api.kwiatekmiki.pl/api/json"
+        "https://cobalt-api.kwiatekmiki.com", # Verified working (V10)
+        "https://api.cobalt.tools",             # Official (Might require Auth)
+        "https://cobalt.api.kwiatekmiki.pl"     # Old domain (backup)
     ]
 
     headers = {
@@ -723,21 +727,45 @@ def attempt_fallback_download(url: str, job_id: str):
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    payload = {"url": url, "vQuality": "max", "filenamePattern": "basic"}
+    # V10 Payload
+    payload = {
+        "url": url, 
+        "videoQuality": "max", 
+        "filenameStyle": "basic"
+    }
 
-    for api_url in instances:
+    for base_url in instances:
         try:
+            # Construct V10 endpoint (POST /)
+            api_url = base_url.rstrip('/') + "/"
+            
             logging.info(f"Trying Fallback Instance: {api_url}")
             with httpx.Client(timeout=60.0) as client:
                 resp = client.post(api_url, json=payload, headers=headers)
-                if resp.status_code != 200:
+                
+                # Check 404/400 explicitly
+                if resp.status_code not in [200, 201]:
                     logging.error(f"Instance {api_url} Error: {resp.status_code} - {resp.text}")
                     continue # Try next
                 
                 data = resp.json()
-                download_url = data.get('url')
+                
+                # Handle V10 Response types
+                status = data.get('status')
+                download_url = None
+                
+                if status in ['tunnel', 'redirect']:
+                    download_url = data.get('url')
+                elif status == 'picker':
+                    # If picker, just take the first item's url
+                    if data.get('picker') and len(data['picker']) > 0:
+                        download_url = data['picker'][0].get('url')
+                elif 'url' in data:
+                    # Legacy or implicit
+                    download_url = data.get('url')
+
                 if not download_url:
-                    logging.error(f"Instance {api_url} No URL returned")
+                    logging.error(f"Instance {api_url} No URL returned (Status: {status})")
                     continue
                     
                 # Download the actual file
@@ -745,7 +773,9 @@ def attempt_fallback_download(url: str, job_id: str):
                 
                 # Determine extension
                 ext = 'mp4' # Default
-                if 'audio' in str(data.get('filename', '')): ext = 'mp3'
+                # V10 might omit filename, try to guess from connection or data
+                if 'audio' in str(data.get('filename', '')) or 'audio' in str(status): 
+                    ext = 'mp3'
                 
                 temp_path = os.path.join(TEMP_DIR, f"{job_id}.{ext}")
                 
