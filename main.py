@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.1")
+app = FastAPI(title="yt-dlp API Server", version="8.4.2")
 
 @app.on_event("startup")
 async def startup_event():
@@ -553,6 +553,21 @@ def run_download(job_id: str, req: DownloadRequest):
     elif "list=" in req.url:
         logging.info(f"URL contains list parameter but treated as single video: {req.url}")
 
+    # Locate FFmpeg to ensure merging works
+    ffmpeg_path = None
+    possible_ffmpeg_paths = [
+        os.path.join(execution_dir, 'ffmpeg.exe'),
+        os.path.join(execution_dir, 'bin', 'ffmpeg.exe'),
+        "ffmpeg" # System path fallback
+    ]
+    for path in possible_ffmpeg_paths:
+        if path == "ffmpeg" or os.path.exists(path):
+            ffmpeg_path = path
+            break
+            
+    if ffmpeg_path and ffmpeg_path != "ffmpeg":
+         ydl_opts['ffmpeg_location'] = os.path.dirname(ffmpeg_path)
+
     # Format selection
     if req.type == 'audio':
         ydl_opts['format'] = 'bestaudio/best'
@@ -562,10 +577,9 @@ def run_download(job_id: str, req: DownloadRequest):
             'preferredquality': '192',
         }]
     else:
-        # Video format - Try best quality merge first, then best single file
+        # Video format - Try best quality merge first, then best single file, then separate bests
+        # If ffmpeg is missing, merge will fail, but /best should handle it fallback
         ydl_opts['format'] = 'bestvideo+bestaudio/best'
-        # Remove merge_output_format to allow whatever the client gives (often mp4)
-        # But we can try to hint
         ydl_opts['format_sort'] = ['res', 'ext:mp4:m4a']
 
     try:
@@ -750,10 +764,12 @@ def attempt_fallback_download(url: str, job_id: str):
             # Payload consistent for V7/V10 usually
             payload = {
                 "url": url, 
-                "videoQuality": "max", 
-                "filenameStyle": "basic",
-                "downloadMode": "auto" # V10 specific but harmless on V7
+                "vQuality": "max",
+                "filenamePattern": "basic"
             }
+            
+            # V10 specific fields check (optional, but some servers are strict)
+            # Most modern instances accept {url} and defaults. 
             
             with httpx.Client(timeout=15.0) as client:
                 # 1. Try V7 endpoint first (Most common on public instances)
@@ -761,15 +777,17 @@ def attempt_fallback_download(url: str, job_id: str):
                 api_url_v7 = f"{base_url.rstrip('/')}/api/json"
                 
                 try:
+                    # Generic V7 payload
                     resp = client.post(api_url_v7, json=payload, headers=headers)
                 except Exception:
                     # DNS error or connection refused
                     continue    
 
-                # 2. If 404, try Root (V10)
+                # 2. If 404, try Root (V10) or /api/serverInfo check logic?
                 if resp.status_code == 404:
                     api_url_root = f"{base_url.rstrip('/')}/"
-                    resp = client.post(api_url_root, json=payload, headers=headers)
+                    # V10 might want strict JSON
+                    resp = client.post(api_url_root, json={"url": url}, headers=headers)
 
                 # Check Success
                 if resp.status_code not in [200, 201]:
