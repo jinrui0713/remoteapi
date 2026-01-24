@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.4")
+app = FastAPI(title="yt-dlp API Server", version="8.4.5")
 
 @app.on_event("startup")
 async def startup_event():
@@ -798,10 +798,17 @@ def attempt_fallback_download(url: str, job_id: str):
                     # logging.info(f"Cobalt {base_url} Failed: {resp.status_code}")
                     continue 
 
-                data = resp.json()
+                # Sometimes response is text/json but marked otherwise
+                try:
+                    data = resp.json()
+                except:
+                     logging.warning(f"Cobalt {base_url} returned invalid JSON")
+                     continue
                 
                 # Check for errors in json
                 if data.get('status') == 'error':
+                    # error detail
+                    # logging.warning(f"Cobalt API Error: {data.get('text')}")
                     continue
 
                 status = data.get('status')
@@ -818,12 +825,19 @@ def attempt_fallback_download(url: str, job_id: str):
                     logging.info(f"Cobalt URL obtained from {base_url}: {download_url[:30]}...")
                     # Filename hint
                     f_hint = data.get('filename', f'Cobalt_{job_id}.mp4')
-                    return process_generic_download(download_url, job_id, client, f_hint, 'mp4')
+                    # extension guess
+                    ext = f_hint.split('.')[-1] if '.' in f_hint else 'mp4'
                     
-        except Exception as ex:
-             # logging.error(f"Cobalt {base_url} Exception: {ex}")
-             continue
-    
+                    # 4. Perform Download
+                    res = process_generic_download(download_url, job_id, client, f_hint, ext)
+                    if res:
+                        # Success
+                        return res
+                        
+        except Exception as e:
+            # logging.warning(f"Cobalt loop path error: {e}")
+            pass
+            
     # All fallbacks failed
     logging.error("All fallback instances failed.")
     return False

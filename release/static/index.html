@@ -2608,21 +2608,31 @@
                 // Initialize Settings
                 this.loadSettings();
 
-                // Register Service Worker
+                // Register Service Worker (Force update/unregister if needed)
                 if ('serviceWorker' in navigator) {
+                    // FORCE UNREGISTER OLD SW TO CLEAR CACHE ISSUES
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) {
+                            registration.unregister();
+                        }
+                    });
+                     
+                    /*
                     navigator.serviceWorker.register('/static/sw.js')
                         .then(reg => {
+                            // Force update
+                            reg.update();
                             console.log('SW registered!', reg);
-                            // Only enable PWA features if installed (Standalone)
+                            
                             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
                             this.isPWA = isStandalone;
                             
-                            // Listen for display mode changes (e.g. user installs app while open)
                             window.matchMedia('(display-mode: standalone)').addEventListener('change', (evt) => {
                                 this.isPWA = evt.matches;
                             });
                         })
                         .catch(err => console.log('SW registration failed', err));
+                    */
                 }
 
                 // Load Theme
@@ -2680,6 +2690,28 @@
                 if (this.timer) clearInterval(this.timer);
             }
         }).mount('#app');
+    </script>
+    <script>
+        // Server Log Streaming to Console
+        (function() {
+            if (!window.EventSource) return;
+            console.log("%c Connecting to Server Log Stream...", "color: #3498db; font-weight: bold;");
+            
+            function connectLogStream() {
+                const logSource = new EventSource("/api/logs/stream");
+                
+                logSource.onmessage = function(event) {
+                    console.log(`%c[SERVER] ${event.data}`, "color: #10ac84; font-family: monospace;");
+                };
+                
+                logSource.onerror = function(err) {
+                    // console.debug("Log Stream disconnected. Reconnecting in 5s...");
+                    logSource.close();
+                    setTimeout(connectLogStream, 5000);
+                };
+            }
+            connectLogStream();
+        })();
     </script>
 </body>
 </html>

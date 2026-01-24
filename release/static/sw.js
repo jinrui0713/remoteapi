@@ -42,12 +42,20 @@ self.addEventListener('fetch', (event) => {
         return; 
     }
 
-    // 3. Static Assets & App Shell - Stale-While-Revalidate
-    event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            const fetchPromise = fetch(event.request).then((networkResponse) => {
-                caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(event.request, networkResponse.clone());
+    // 3. Static Assets & App Shell - NETWORK ONLY (Disable Cache for now to fix header issues)
+    // event.respondWith(
+    //     caches.match(event.request).then((cachedResponse) => {
+    //         const fetchPromise = fetch(event.request).then((networkResponse) => {
+    //             caches.open(CACHE_NAME).then((cache) => {
+    //                 cache.put(event.request, networkResponse.clone());
+    //             });
+    //             return networkResponse;
+    //         });
+    //         return cachedResponse || fetchPromise;
+    //     })
+    // );
+    return; // Pass through to network (effectively disables SW interception for now)
+});
                 });
                 return networkResponse;
             }).catch(() => {
