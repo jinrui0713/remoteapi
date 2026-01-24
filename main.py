@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.3.17")
+app = FastAPI(title="yt-dlp API Server", version="8.3.18")
 
 @app.on_event("startup")
 async def startup_event():
@@ -710,60 +710,71 @@ def run_download(job_id: str, req: DownloadRequest):
         logging.error(f"Job {job_id} completely failed.")
 
 def attempt_fallback_download(url: str, job_id: str):
-    """Fallback using Cobalt API (V10) -> Y2Mate (Clone) when yt-dlp fails"""
+    """Fallback using multiple Cobalt API providers when yt-dlp fails"""
     logging.info(f"Using Fallback Chain for {job_id}")
     job = jobs.get(job_id)
     if not job: return False
 
-    # --- Strategy 1: Cobalt API (V10) ---
-    # V10 uses POST / with Accept: application/json
-    cobalt_instances = [
-        "https://cobalt.bowring.uk",
-        "https://cobalt.steamodded.com",
-        "https://cobalt.api.kwiatekmiki.pl",
-        "https://cobalt.777.tf",
-        "https://url.ytdl.link",
-        "https://cobalt.synced.site" 
-    ]
-    
+    # Standard Headers
     headers = {
         "Accept": "application/json", 
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     }
 
-    # Try Cobalt Instances
+    # --- Strategy: Cobalt API Instances ---
+    # Public instances come and go. We try a mix of known providers.
+    # Note: Endpoints differ. V7 uses /api/json, V10 uses /
+    cobalt_instances = [
+        # ggtyler providers (Often reliable)
+        "https://nyc1.coapi.ggtyler.dev",
+        "https://cal1.coapi.ggtyler.dev", 
+        "https://par1.coapi.ggtyler.dev",
+        # Others
+        "https://coapi.kelig.me",
+        "https://ca.haloz.at",
+        "https://cobalt-api.ayo.tf",
+        "https://api.cobalt.tacohitbox.com",
+        "https://cobalt.twi.sh"
+    ]
+
     for base_url in cobalt_instances:
         try:
-            api_url = base_url.rstrip('/') + "/"
-            logging.info(f"Trying Cobalt Instance (V10): {api_url}")
+            logging.info(f"Trying Cobalt Instance: {base_url}")
             
-            # V10 payload
+            # Payload consistent for V7/V10 usually
             payload = {
                 "url": url, 
                 "videoQuality": "max", 
                 "filenameStyle": "basic",
-                "downloadMode": "auto"
+                "downloadMode": "auto" # V10 specific but harmless on V7
             }
             
             with httpx.Client(timeout=15.0) as client:
-                # V10 Endpoint: Root /
-                resp = client.post(api_url, json=payload, headers=headers)
+                # 1. Try V7 endpoint first (Most common on public instances)
+                # many use /api/json
+                api_url_v7 = f"{base_url.rstrip('/')}/api/json"
                 
-                # If 404, maybe it's actually V7 (api/json)? We can try, but V10 is standard now
+                try:
+                    resp = client.post(api_url_v7, json=payload, headers=headers)
+                except Exception:
+                    # DNS error or connection refused
+                    continue    
+
+                # 2. If 404, try Root (V10)
                 if resp.status_code == 404:
-                     # Try legacy
-                     resp = client.post(f"{api_url}api/json", json=payload, headers=headers)
-                
+                    api_url_root = f"{base_url.rstrip('/')}/"
+                    resp = client.post(api_url_root, json=payload, headers=headers)
+
+                # Check Success
                 if resp.status_code not in [200, 201]:
-                    logging.info(f"Cobalt {api_url} Failed: {resp.status_code} - {str(resp.text)[:100]}")
+                    # logging.info(f"Cobalt {base_url} Failed: {resp.status_code}")
                     continue 
-                
+
                 data = resp.json()
                 
-                # Check for V10 error body
+                # Check for errors in json
                 if data.get('status') == 'error':
-                    logging.info(f"Cobalt Error Body: {data.get('text')}")
                     continue
 
                 status = data.get('status')
@@ -773,87 +784,21 @@ def attempt_fallback_download(url: str, job_id: str):
                     download_url = data.get('url')
                 elif status == 'picker' and data.get('picker'):
                     download_url = data['picker'][0].get('url')
-                elif 'url' in data: # Generic fallback
+                elif 'url' in data: 
                     download_url = data.get('url')
 
                 if download_url:
-                    logging.info(f"Cobalt URL obtained: {download_url[:30]}...")
-                    # Filename hint from response or fallback
+                    logging.info(f"Cobalt URL obtained from {base_url}: {download_url[:30]}...")
+                    # Filename hint
                     f_hint = data.get('filename', f'Cobalt_{job_id}.mp4')
                     return process_generic_download(download_url, job_id, client, f_hint, 'mp4')
                     
         except Exception as ex:
-             logging.error(f"Cobalt {api_url} Exception: {ex}")
+             # logging.error(f"Cobalt {base_url} Exception: {ex}")
              continue
-             
-    # --- Strategy 2: Y2Mate (High Failure Rate due to Turnstile) ---
-    # Only keep as last resort
-    try:
-        logging.info("Trying Y2Mate Fallback...")
-        y2_domain = "https://en1.y2mate.is" 
-        
-        y2_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Referer": y2_domain,
-            "Origin": y2_domain,
-            "X-Requested-With": "XMLHttpRequest"
-        }
-        
-        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-            logging.info(f"Y2Mate: Fetching {y2_domain} for token...")
-            r_main = client.get(y2_domain)
-            
-            final_domain = str(r_main.url).rstrip('/')
-            if final_domain.endswith('/yt-app'): final_domain = final_domain.replace('/yt-app', '')
-            
-            analyze_url = f"{final_domain}/analyze"
-            convert_url = f"{final_domain}/convert"
-            
-            import re
-            csrf_token = None
-            token_match = re.search(r'<meta name="csrf-token" content="([^"]+)">', r_main.text)
-            if token_match:
-                csrf_token = token_match.group(1)
-                y2_headers["X-CSRF-TOKEN"] = csrf_token
-            else:
-                logging.warning("Y2Mate: CSRF Token not found in HTML.")
-            
-            y2_headers["Referer"] = str(r_main.url)
-            y2_headers["Origin"] = final_domain
-
-            # Analyze
-            resp1 = client.post(analyze_url, data={"k_query": url, "k_page": "home", "hl": "en", "q_auto": 0}, headers=y2_headers)
-            
-            if resp1.status_code == 200:
-                d1 = resp1.json()
-                # Debug logging if structure unexpected
-                if 'error' in d1 and d1['error']:
-                     logging.warning(f"Y2Mate API Error: {d1.get('message')}")
-                elif 'vid' in d1 and 'links' in d1 and 'mp4' in d1['links']:
-                    vid = d1['vid']
-                    k_key = None
-                    for key, val in d1['links']['mp4'].items():
-                        if val.get('k'): 
-                            k_key = val['k']
-                            break
-                    
-                    if k_key:
-                        time.sleep(1) 
-                        resp2 = client.post(convert_url, data={"vid": vid, "k": k_key}, headers=y2_headers)
-                        if resp2.status_code == 200:
-                            d2 = resp2.json()
-                            if d2.get('status') == 'ok' and d2.get('dlink'):
-                                dlink = d2['dlink']
-                                logging.info(f"Y2Mate URL obtained: {dlink[:30]}...")
-                                return process_generic_download(dlink, job_id, client, d2.get('title', f"Y2Mate_{job_id}"), 'mp4')
-                else:
-                     logging.warning(f"Y2Mate: Links not found in response. Keys: {list(d1.keys())}")
-            else:
-                logging.error(f"Y2Mate Analyze Failed: {resp1.status_code}")
-
-    except Exception as ex:
-        logging.error(f"Y2Mate Exception: {ex}")
-
+    
+    # All fallbacks failed
+    logging.error("All fallback instances failed.")
     return False
 
 def process_generic_download(download_url, job_id, client, filename_hint, ext):
