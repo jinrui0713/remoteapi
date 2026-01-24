@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.5")
+app = FastAPI(title="yt-dlp API Server", version="8.4.7")
 
 @app.on_event("startup")
 async def startup_event():
@@ -593,7 +593,15 @@ def run_download(job_id: str, req: DownloadRequest):
             info = attempt_download(ydl_opts)
         except yt_dlp.utils.DownloadError as e:
             err_msg = str(e)
-            if ("Sign in to confirm" in err_msg or "downloaded file is empty" in err_msg) and 'cookiefile' in ydl_opts:
+            
+            if "Requested format is not available" in err_msg:
+                logging.warning("Requested format unavailable. Retrying with generic 'best' format...")
+                ydl_opts['format'] = 'best'
+                if 'format_sort' in ydl_opts:
+                    del ydl_opts['format_sort']
+                info = attempt_download(ydl_opts)
+
+            elif ("Sign in to confirm" in err_msg or "downloaded file is empty" in err_msg) and 'cookiefile' in ydl_opts:
                 logging.warning(f"Download error detected ({err_msg}). Retrying with browser cookies (Chrome/Edge)...")
                 # Fallback: Remove file and use browser. Removed Firefox to avoid keyring issues.
                 try: 
@@ -689,7 +697,14 @@ def run_download(job_id: str, req: DownloadRequest):
     except Exception as e:
         # Fallback attempt
         logging.error(f"yt-dlp failed: {e}. Attempting Fallback...")
-        fallback_info = attempt_fallback_download(req.url, job_id)
+        
+        # Since we are in a ThreadPoolExecutor, we need to spin up a new event loop for async fallback
+        try:
+             fallback_info = asyncio.run(attempt_fallback_download(req.url, job_id))
+        except Exception as af_e:
+             logging.error(f"Fallback async execution failed: {af_e}")
+             fallback_info = None
+
         if fallback_info:
             logging.info("Fallback download successful. Processing file...")
             # Simulate info dict
@@ -724,30 +739,24 @@ def run_download(job_id: str, req: DownloadRequest):
         job.error_msg = f"Download Failed: {str(e)} (And fallback failed)"
         logging.error(f"Job {job_id} completely failed.")
 
-def attempt_fallback_download(url: str, job_id: str):
-    """Fallback using multiple Cobalt API providers when yt-dlp fails"""
+async def attempt_fallback_download(url: str, job_id: str):
+    """Fallback using multiple Cobalt API providers in parallel (Race)"""
     logging.info(f"Using Fallback Chain for {job_id}")
     job = jobs.get(job_id)
     if not job: return False
 
-    # Standard Headers
     headers = {
         "Accept": "application/json", 
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     }
 
-    # --- Strategy: Cobalt API Instances ---
-    # Public instances come and go. We try a mix of known providers.
-    # Note: Endpoints differ. V7 uses /api/json, V10 uses /
+    # Parallel check for fastest instance
     cobalt_instances = [
-        # Primary working instance
         "https://api.cobalt.tools",
-        # Backups
         "https://cobalt.tools",
         "https://co.wuk.sh",
         "https://api.wuk.sh",
-        # Legacy/Unstable
         "https://nyc1.coapi.ggtyler.dev",
         "https://cal1.coapi.ggtyler.dev", 
         "https://par1.coapi.ggtyler.dev",
@@ -755,107 +764,102 @@ def attempt_fallback_download(url: str, job_id: str):
         "https://ca.haloz.at",
         "https://cobalt-api.ayo.tf",
         "https://api.cobalt.tacohitbox.com",
-        "https://cobalt.twi.sh"
+        "https://cobalt.twi.sh",
+        "https://api.sukka.moe/cobalt",
+        "https://cobalt.kwiatekmiki.com",
+        "https://cobalt.q1.app",
+        "https://cobalt.synced.sh",
+        "https://c.jaops.org"
     ]
 
-    for base_url in cobalt_instances:
+    async def check_instance(client, base_url):
         try:
-            logging.info(f"Trying Cobalt Instance: {base_url}")
-            
-            # Payload consistent for V7/V10 usually
-            payload = {
-                "url": url, 
-            }
-            
-    # V10 specific fields check (optional, but some servers are strict)
-            # Most modern instances accept {url} and defaults. 
-            
-            with httpx.Client(timeout=15.0) as client:
-                # 1. Try V7 endpoint first (Most common on public instances)
-                # many use /api/json
-                # Some servers require Accept: application/json
-                api_url_v7 = f"{base_url.rstrip('/')}/api/json"
-                
+            payload = {"url": url}
+            # Try V7
+            api_url = f"{base_url.rstrip('/')}/api/json"
+            try:
+                resp = await client.post(api_url, json=payload, headers=headers)
+            except:
+                # Try Root if V7 network fails immediately
+                api_url = f"{base_url.rstrip('/')}/"
                 try:
-                    # Generic V7 payload
-                    resp = client.post(api_url_v7, json=payload, headers=headers)
-                except Exception:
-                    # DNS error or connection refused
-                    continue    
-
-                # Fallback Logic
-                if resp.status_code != 200:
-                    # Try Root (V10)
-                    api_url_root = f"{base_url.rstrip('/')}/"
-                    try:
-                        resp2 = client.post(api_url_root, json={"url": url}, headers=headers)
-                        if resp2.status_code == 200:
-                            resp = resp2
-                    except: pass
-                
-                # Check Success
-                if resp.status_code not in [200, 201]:
-                    # logging.info(f"Cobalt {base_url} Failed: {resp.status_code}")
-                    continue 
-
-                # Sometimes response is text/json but marked otherwise
-                try:
-                    data = resp.json()
+                    resp = await client.post(api_url, json={"url": url}, headers=headers)
                 except:
-                     logging.warning(f"Cobalt {base_url} returned invalid JSON")
-                     continue
-                
-                # Check for errors in json
-                if data.get('status') == 'error':
-                    # error detail
-                    # logging.warning(f"Cobalt API Error: {data.get('text')}")
-                    continue
+                    return None
 
-                status = data.get('status')
-                download_url = None
+            if resp.status_code not in [200, 201]:
+                # Retry Root if V7 returned 404
+                if api_url.endswith("/api/json"):
+                     api_url = f"{base_url.rstrip('/')}/"
+                     try:
+                        resp = await client.post(api_url, json={"url": url}, headers=headers)
+                     except: pass
+            
+            if resp.status_code not in [200, 201]:
+                return None
                 
-                if status in ['tunnel', 'redirect']:
-                    download_url = data.get('url')
-                elif status == 'picker' and data.get('picker'):
-                    download_url = data['picker'][0].get('url')
-                elif 'url' in data: 
-                    download_url = data.get('url')
-
-                if download_url:
-                    logging.info(f"Cobalt URL obtained from {base_url}: {download_url[:30]}...")
-                    # Filename hint
-                    f_hint = data.get('filename', f'Cobalt_{job_id}.mp4')
-                    # extension guess
-                    ext = f_hint.split('.')[-1] if '.' in f_hint else 'mp4'
-                    
-                    # 4. Perform Download
-                    res = process_generic_download(download_url, job_id, client, f_hint, ext)
-                    if res:
-                        # Success
-                        return res
-                        
-        except Exception as e:
-            # logging.warning(f"Cobalt loop path error: {e}")
+            try:
+                data = resp.json()
+            except:
+                return None
+                
+            if data.get('status') == 'error':
+                 return None
+                 
+            # Extract
+            download_url = None
+            status = data.get('status')
+            if status in ['tunnel', 'redirect']:
+                download_url = data.get('url')
+            elif status == 'picker' and data.get('picker'):
+                download_url = data['picker'][0].get('url')
+            elif 'url' in data: 
+                download_url = data.get('url')
+                
+            if download_url:
+                return {'base_url': base_url, 'data': data, 'download_url': download_url}
+        except:
             pass
+        return None
+
+    # Use AsyncClient for parallel requests
+    # verify=False to avoid SSL issues on some shady instances
+    async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+        tasks = [check_instance(client, u) for u in cobalt_instances]
+        
+        for future in asyncio.as_completed(tasks):
+            res = await future
+            if res:
+                base_url = res['base_url']
+                download_url = res['download_url']
+                data = res['data']
+                logging.info(f"Cobalt instance winner: {base_url}")
+                
+                # Filename hint
+                f_hint = data.get('filename', f'Cobalt_{job_id}.mp4')
+                ext = f_hint.split('.')[-1] if '.' in f_hint else 'mp4'
+                
+                # Download File
+                return await process_generic_download_async(download_url, job_id, client, f_hint, ext)
             
     # All fallbacks failed
     logging.error("All fallback instances failed.")
     return False
 
-def process_generic_download(download_url, job_id, client, filename_hint, ext):
-    """Helper to download file from a direct link"""
+async def process_generic_download_async(download_url, job_id, client, filename_hint, ext):
+    """Helper to download file from a direct link (Async)"""
     # Create temp path
     # If generic, we default to mp4
     temp_path = os.path.join(TEMP_DIR, f"{job_id}.{ext}")
     job = jobs.get(job_id)
     
     try:
-        with client.stream("GET", download_url) as r:
+        async with client.stream("GET", download_url) as r:
             r.raise_for_status()
             total = int(r.headers.get('content-length', 0))
             downloaded = 0
             with open(temp_path, 'wb') as f:
-                for chunk in r.iter_bytes(chunk_size=65536):
+                async for chunk in r.aiter_bytes(chunk_size=65536):
                     f.write(chunk)
                     downloaded += len(chunk)
                     if total and job:
