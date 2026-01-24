@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.3")
+app = FastAPI(title="yt-dlp API Server", version="8.4.4")
 
 @app.on_event("startup")
 async def startup_event():
@@ -558,6 +558,7 @@ def run_download(job_id: str, req: DownloadRequest):
     possible_ffmpeg_paths = [
         os.path.join(execution_dir, 'ffmpeg.exe'),
         os.path.join(execution_dir, 'bin', 'ffmpeg.exe'),
+        os.path.join(execution_dir, 'release', 'ffmpeg.exe'), # Check release folder
         "ffmpeg" # System path fallback
     ]
     for path in possible_ffmpeg_paths:
@@ -766,12 +767,13 @@ def attempt_fallback_download(url: str, job_id: str):
                 "url": url, 
             }
             
-            # V10 specific fields check (optional, but some servers are strict)
+    # V10 specific fields check (optional, but some servers are strict)
             # Most modern instances accept {url} and defaults. 
             
             with httpx.Client(timeout=15.0) as client:
                 # 1. Try V7 endpoint first (Most common on public instances)
                 # many use /api/json
+                # Some servers require Accept: application/json
                 api_url_v7 = f"{base_url.rstrip('/')}/api/json"
                 
                 try:
@@ -781,16 +783,16 @@ def attempt_fallback_download(url: str, job_id: str):
                     # DNS error or connection refused
                     continue    
 
-                # 2. If 404, try Root (V10) or /api/serverInfo check logic?
-                if resp.status_code == 404:
+                # Fallback Logic
+                if resp.status_code != 200:
+                    # Try Root (V10)
                     api_url_root = f"{base_url.rstrip('/')}/"
-                    # V10 might want strict JSON
-                    resp = client.post(api_url_root, json={"url": url}, headers=headers)
+                    try:
+                        resp2 = client.post(api_url_root, json={"url": url}, headers=headers)
+                        if resp2.status_code == 200:
+                            resp = resp2
+                    except: pass
                 
-                # If 400 Bad Request, try again with no extra params (pure barebones)
-                if resp.status_code == 400:
-                     resp = client.post(api_url_v7, json={"url": url}, headers=headers)
-
                 # Check Success
                 if resp.status_code not in [200, 201]:
                     # logging.info(f"Cobalt {base_url} Failed: {resp.status_code}")
