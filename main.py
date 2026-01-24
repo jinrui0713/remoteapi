@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.0")
+app = FastAPI(title="yt-dlp API Server", version="8.4.1")
 
 @app.on_event("startup")
 async def startup_event():
@@ -562,8 +562,8 @@ def run_download(job_id: str, req: DownloadRequest):
             'preferredquality': '192',
         }]
     else:
-        # Video format - Most compatible generic selector
-        ydl_opts['format'] = 'best/bestvideo+bestaudio'
+        # Video format - Try best quality merge first, then best single file
+        ydl_opts['format'] = 'bestvideo+bestaudio/best'
         # Remove merge_output_format to allow whatever the client gives (often mp4)
         # But we can try to hint
         ydl_opts['format_sort'] = ['res', 'ext:mp4:m4a']
@@ -726,11 +726,16 @@ def attempt_fallback_download(url: str, job_id: str):
     # Public instances come and go. We try a mix of known providers.
     # Note: Endpoints differ. V7 uses /api/json, V10 uses /
     cobalt_instances = [
-        # ggtyler providers (Often reliable)
+        # Primary working instance
+        "https://api.cobalt.tools",
+        # Backups
+        "https://cobalt.tools",
+        "https://co.wuk.sh",
+        "https://api.wuk.sh",
+        # Legacy/Unstable
         "https://nyc1.coapi.ggtyler.dev",
         "https://cal1.coapi.ggtyler.dev", 
         "https://par1.coapi.ggtyler.dev",
-        # Others
         "https://coapi.kelig.me",
         "https://ca.haloz.at",
         "https://cobalt-api.ayo.tf",
