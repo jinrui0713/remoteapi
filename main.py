@@ -39,6 +39,8 @@ try:
     from typing import Dict, List, Optional
     from yt_dlp.utils import sanitize_filename
     import db_utils
+    # Import external downloaders
+    import external_downloaders
     
     # Initialize DB
     db_utils.init_db()
@@ -752,6 +754,9 @@ async def attempt_fallback_download(url: str, job_id: str):
     }
 
     # Parallel check for fastest instance
+    # We include traditional Cobalt instances AND external scrapers (SaveFrom, Y2Mate)
+    # This ensures maximum robustness and speed.
+    
     cobalt_instances = [
         "https://api.cobalt.tools",
         "https://cobalt.tools",
@@ -802,7 +807,7 @@ async def attempt_fallback_download(url: str, job_id: str):
                 data = resp.json()
             except:
                 return None
-                
+            
             if data.get('status') == 'error':
                  return None
                  
@@ -817,34 +822,43 @@ async def attempt_fallback_download(url: str, job_id: str):
                 download_url = data.get('url')
                 
             if download_url:
-                return {'base_url': base_url, 'data': data, 'download_url': download_url}
+                return {'base_url': base_url, 'data': data, 'download_url': download_url, 'source': 'Cobalt'}
         except:
             pass
         return None
 
     # Use AsyncClient for parallel requests
     # verify=False to avoid SSL issues on some shady instances
-    async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+    async with httpx.AsyncClient(timeout=25.0, verify=False) as client:
+        # Create tasks for Cobalt
         tasks = [check_instance(client, u) for u in cobalt_instances]
+        
+        # Add external scrapers tasks
+        tasks.append(external_downloaders.get_savefrom(url, client))
+        tasks.append(external_downloaders.get_y2mate(url, client))
+        
+        # Log count
+        # logging.info(f"Racing {len(tasks)} fallback providers...")
         
         for future in asyncio.as_completed(tasks):
             res = await future
             if res:
-                base_url = res['base_url']
-                download_url = res['download_url']
-                data = res['data']
-                logging.info(f"Cobalt instance winner: {base_url}")
+                source = res.get('source', 'Unknown')
+                base_url = res.get('base_url', 'External')
+                download_url = res.get('download_url')
+                data = res.get('data', {})
+                
+                logging.info(f"Fallback Winner: {source} ({base_url})")
                 
                 # Filename hint
-                f_hint = data.get('filename', f'Cobalt_{job_id}.mp4')
+                f_hint = data.get('filename', f'{source}_{job_id}.mp4')
                 ext = f_hint.split('.')[-1] if '.' in f_hint else 'mp4'
                 
                 # Download File
                 return await process_generic_download_async(download_url, job_id, client, f_hint, ext)
             
     # All fallbacks failed
-    logging.error("All fallback instances failed.")
-    return False
+    logging.error("All fallback instances/scrapers failed.")
 
 async def process_generic_download_async(download_url, job_id, client, filename_hint, ext):
     """Helper to download file from a direct link (Async)"""
