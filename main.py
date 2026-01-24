@@ -80,7 +80,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.2")
+app = FastAPI(title="yt-dlp API Server", version="8.4.3")
 
 @app.on_event("startup")
 async def startup_event():
@@ -764,8 +764,6 @@ def attempt_fallback_download(url: str, job_id: str):
             # Payload consistent for V7/V10 usually
             payload = {
                 "url": url, 
-                "vQuality": "max",
-                "filenamePattern": "basic"
             }
             
             # V10 specific fields check (optional, but some servers are strict)
@@ -788,6 +786,10 @@ def attempt_fallback_download(url: str, job_id: str):
                     api_url_root = f"{base_url.rstrip('/')}/"
                     # V10 might want strict JSON
                     resp = client.post(api_url_root, json={"url": url}, headers=headers)
+                
+                # If 400 Bad Request, try again with no extra params (pure barebones)
+                if resp.status_code == 400:
+                     resp = client.post(api_url_v7, json={"url": url}, headers=headers)
 
                 # Check Success
                 if resp.status_code not in [200, 201]:
