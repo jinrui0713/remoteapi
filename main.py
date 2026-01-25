@@ -82,7 +82,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.11")
+app = FastAPI(title="yt-dlp API Server", version="8.4.12")
 
 @app.on_event("startup")
 async def startup_event():
@@ -973,6 +973,11 @@ async def stream_video(url: str, request: Request):
             if 'User-Agent' not in headers:
                  headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
+            # Forward Range Header
+            range_header = request.headers.get('range')
+            if range_header:
+                headers['Range'] = range_header
+
             client = httpx.AsyncClient(verify=False, follow_redirects=True)
             req_stream = client.build_request("GET", stream_url, headers=headers)
             r = await client.send(req_stream, stream=True)
@@ -980,9 +985,15 @@ async def stream_video(url: str, request: Request):
             msg = f"Proxying Stream: {stream_url[:50]}... Status: {r.status_code} Type: {r.headers.get('content-type')}"
             logging.info(msg)
             
+            response_headers = {}
+            for k in ['Content-Range', 'Content-Length', 'Accept-Ranges', 'Content-Type']:
+                if r.headers.get(k):
+                    response_headers[k] = r.headers.get(k)
+            
             return StreamingResponse(
                 proxy_service.stream_response(r, request.client.host, limit_bps),
                 status_code=r.status_code,
+                headers=response_headers,
                 media_type=r.headers.get("content-type"),
             )
     except Exception as e:
