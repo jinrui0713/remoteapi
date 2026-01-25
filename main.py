@@ -82,7 +82,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.9")
+app = FastAPI(title="yt-dlp API Server", version="8.4.10")
 
 @app.on_event("startup")
 async def startup_event():

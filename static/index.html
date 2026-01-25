@@ -2547,15 +2547,42 @@
                 
                 setupMediaSession(title, artist = 'Yt-Dlp Server', artwork = null) {
                     if ('mediaSession' in navigator) {
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                            title: title,
-                            artist: artist,
-                            album: 'Downloads',
-                            artwork: artwork || [
-                                { src: '/static/icon-192.png', sizes: '192x192', type: 'image/png' },
-                                { src: '/static/icon-512.png', sizes: '512x512', type: 'image/png' }
-                            ]
-                        });
+                        let finalArtwork = [
+                            { src: 'static/icon-192.png', sizes: '192x192', type: 'image/png' },
+                            { src: 'static/icon-512.png', sizes: '512x512', type: 'image/png' }
+                        ];
+
+                        if (artwork && Array.isArray(artwork) && artwork.length > 0) {
+                            // Convert yt-dlp thumbnails (url) to MediaImage (src)
+                            const converted = artwork.map(item => {
+                                const src = item.src || item.url;
+                                if (!src) return null;
+                                let sizes = item.sizes;
+                                if (!sizes && item.width && item.height) {
+                                    sizes = `${item.width}x${item.height}`;
+                                }
+                                return {
+                                    src: src,
+                                    sizes: sizes, // Optional but good
+                                    type: item.type || undefined 
+                                };
+                            }).filter(x => x !== null);
+                            
+                            if (converted.length > 0) {
+                                finalArtwork = converted;
+                            }
+                        }
+
+                        try {
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: title,
+                                artist: artist,
+                                album: 'Yt-Dlp Server',
+                                artwork: finalArtwork
+                            });
+                        } catch (e) {
+                            console.warn("MediaSession setup failed:", e);
+                        }
 
                         navigator.mediaSession.setActionHandler('play', () => this.$refs.videoPlayer.play());
                         navigator.mediaSession.setActionHandler('pause', () => this.$refs.videoPlayer.pause());
