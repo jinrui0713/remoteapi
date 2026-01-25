@@ -82,7 +82,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.8")
+app = FastAPI(title="yt-dlp API Server", version="8.4.9")
 
 @app.on_event("startup")
 async def startup_event():
@@ -513,7 +513,7 @@ def run_download(job_id: str, req: DownloadRequest):
         # Improve stability
         'cachedir': False, 
         'nocheckcertificate': True,
-        'extractor_args': {'youtube': {'player_client': ['tv']}},
+        # 'extractor_args': {'youtube': {'player_client': ['tv']}},
     }
     
     # Cookie handling: Prioritize cookies.txt
@@ -934,7 +934,7 @@ async def stream_video(url: str, request: Request):
             'format': 'best', 
             'quiet': True,
             'cachedir': False,
-            'extractor_args': {'youtube': {'player_client': ['tv']}},
+            # 'extractor_args': {'youtube': {'player_client': ['tv']}},
         }
         
         # Cookie handling
