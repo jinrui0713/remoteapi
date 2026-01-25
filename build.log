@@ -1,0 +1,421 @@
+Building YtDlpApiServer...
+Installing dependencies...
+Collecting aiohappyeyeballs==2.6.1 (from -r requirements.txt (line 1))
+  Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiohttp==3.12.15 (from -r requirements.txt (line 2))
+  Using cached aiohttp-3.12.15-cp312-cp312-win_amd64.whl.metadata (7.9 kB)
+Collecting aiosignal==1.4.0 (from -r requirements.txt (line 3))
+  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting alembic==1.16.4 (from -r requirements.txt (line 4))
+  Using cached alembic-1.16.4-py3-none-any.whl.metadata (7.3 kB)
+Collecting antlr4-python3-runtime==4.9.3 (from -r requirements.txt (line 5))
+  Using cached antlr4-python3-runtime-4.9.3.tar.gz (117 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting appdirs==1.4.4 (from -r requirements.txt (line 6))
+  Using cached appdirs-1.4.4-py2.py3-none-any.whl.metadata (9.0 kB)
+Collecting asteroid-filterbanks==0.4.0 (from -r requirements.txt (line 7))
+  Using cached asteroid_filterbanks-0.4.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting attrs==25.3.0 (from -r requirements.txt (line 8))
+  Using cached attrs-25.3.0-py3-none-any.whl.metadata (10 kB)
+Collecting audioread==3.0.1 (from -r requirements.txt (line 9))
+  Using cached audioread-3.0.1-py3-none-any.whl.metadata (8.4 kB)
+Collecting av==15.0.0 (from -r requirements.txt (line 10))
+  Using cached av-15.0.0-cp312-cp312-win_amd64.whl.metadata (4.7 kB)
+Collecting beautifulsoup4==4.12.3 (from -r requirements.txt (line 11))
+  Using cached beautifulsoup4-4.12.3-py3-none-any.whl.metadata (3.8 kB)
+Collecting bs4==0.0.2 (from -r requirements.txt (line 12))
+  Using cached bs4-0.0.2-py2.py3-none-any.whl.metadata (411 bytes)
+Collecting certifi==2024.7.4 (from -r requirements.txt (line 13))
+  Using cached certifi-2024.7.4-py3-none-any.whl.metadata (2.2 kB)
+Collecting cffi==1.17.1 (from -r requirements.txt (line 14))
+  Using cached cffi-1.17.1-cp312-cp312-win_amd64.whl.metadata (1.6 kB)
+Collecting chardet==5.2.0 (from -r requirements.txt (line 15))
+  Using cached chardet-5.2.0-py3-none-any.whl.metadata (3.4 kB)
+Collecting charset-normalizer==3.4.3 (from -r requirements.txt (line 16))
+  Using cached charset_normalizer-3.4.3-cp312-cp312-win_amd64.whl.metadata (37 kB)
+Collecting click==8.2.1 (from -r requirements.txt (line 17))
+  Using cached click-8.2.1-py3-none-any.whl.metadata (2.5 kB)
+Requirement already satisfied: colorama==0.4.6 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (from -r requirements.txt (line 18)) (0.4.6)
+Collecting coloredlogs==15.0.1 (from -r requirements.txt (line 19))
+  Using cached coloredlogs-15.0.1-py2.py3-none-any.whl.metadata (12 kB)
+Collecting colorlog==6.9.0 (from -r requirements.txt (line 20))
+  Using cached colorlog-6.9.0-py3-none-any.whl.metadata (10 kB)
+Collecting contourpy==1.3.3 (from -r requirements.txt (line 21))
+  Using cached contourpy-1.3.3-cp312-cp312-win_amd64.whl.metadata (5.5 kB)
+Collecting cssselect==1.2.0 (from -r requirements.txt (line 22))
+  Using cached cssselect-1.2.0-py2.py3-none-any.whl.metadata (2.2 kB)
+Collecting ctranslate2==4.4.0 (from -r requirements.txt (line 23))
+  Using cached ctranslate2-4.4.0-cp312-cp312-win_amd64.whl.metadata (10 kB)
+Collecting cycler==0.12.1 (from -r requirements.txt (line 24))
+  Using cached cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
+Collecting decorator==5.2.1 (from -r requirements.txt (line 25))
+  Using cached decorator-5.2.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting docopt==0.6.2 (from -r requirements.txt (line 26))
+  Using cached docopt-0.6.2.tar.gz (25 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting einops==0.8.1 (from -r requirements.txt (line 27))
+  Using cached einops-0.8.1-py3-none-any.whl.metadata (13 kB)
+Collecting fake-useragent==1.5.1 (from -r requirements.txt (line 28))
+  Using cached fake_useragent-1.5.1-py3-none-any.whl.metadata (15 kB)
+Collecting faster-whisper==1.2.0 (from -r requirements.txt (line 29))
+  Using cached faster_whisper-1.2.0-py3-none-any.whl.metadata (16 kB)
+Collecting ffmpeg-python==0.2.0 (from -r requirements.txt (line 30))
+  Using cached ffmpeg_python-0.2.0-py3-none-any.whl.metadata (1.7 kB)
+Collecting filelock==3.19.1 (from -r requirements.txt (line 31))
+  Using cached filelock-3.19.1-py3-none-any.whl.metadata (2.1 kB)
+Collecting flatbuffers==25.2.10 (from -r requirements.txt (line 32))
+  Using cached flatbuffers-25.2.10-py2.py3-none-any.whl.metadata (875 bytes)
+Collecting fonttools==4.59.1 (from -r requirements.txt (line 33))
+  Using cached fonttools-4.59.1-cp312-cp312-win_amd64.whl.metadata (111 kB)
+Collecting frozenlist==1.7.0 (from -r requirements.txt (line 34))
+  Using cached frozenlist-1.7.0-cp312-cp312-win_amd64.whl.metadata (19 kB)
+Collecting fsspec==2025.7.0 (from -r requirements.txt (line 35))
+  Using cached fsspec-2025.7.0-py3-none-any.whl.metadata (12 kB)
+Collecting future==1.0.0 (from -r requirements.txt (line 36))
+  Using cached future-1.0.0-py3-none-any.whl.metadata (4.0 kB)
+Collecting greenlet==3.2.4 (from -r requirements.txt (line 37))
+  Using cached greenlet-3.2.4-cp312-cp312-win_amd64.whl.metadata (4.2 kB)
+Collecting huggingface-hub==0.34.4 (from -r requirements.txt (line 38))
+  Using cached huggingface_hub-0.34.4-py3-none-any.whl.metadata (14 kB)
+Collecting humanfriendly==10.0 (from -r requirements.txt (line 39))
+  Using cached humanfriendly-10.0-py2.py3-none-any.whl.metadata (9.2 kB)
+Collecting HyperPyYAML==1.2.2 (from -r requirements.txt (line 40))
+  Using cached HyperPyYAML-1.2.2-py3-none-any.whl.metadata (7.6 kB)
+Collecting idna==2.8 (from -r requirements.txt (line 41))
+  Using cached idna-2.8-py2.py3-none-any.whl.metadata (8.9 kB)
+Collecting importlib_metadata==8.2.0 (from -r requirements.txt (line 42))
+  Using cached importlib_metadata-8.2.0-py3-none-any.whl.metadata (4.7 kB)
+Collecting Jinja2==3.1.6 (from -r requirements.txt (line 43))
+  Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting joblib==1.5.1 (from -r requirements.txt (line 44))
+  Using cached joblib-1.5.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting julius==0.2.7 (from -r requirements.txt (line 45))
+  Using cached julius-0.2.7.tar.gz (59 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting kiwisolver==1.4.9 (from -r requirements.txt (line 46))
+  Using cached kiwisolver-1.4.9-cp312-cp312-win_amd64.whl.metadata (6.4 kB)
+Collecting lazy_loader==0.4 (from -r requirements.txt (line 47))
+  Using cached lazy_loader-0.4-py3-none-any.whl.metadata (7.6 kB)
+Collecting librosa==0.11.0 (from -r requirements.txt (line 48))
+  Using cached librosa-0.11.0-py3-none-any.whl.metadata (8.7 kB)
+Collecting lightning==2.5.3 (from -r requirements.txt (line 49))
+  Using cached lightning-2.5.3-py3-none-any.whl.metadata (39 kB)
+Collecting lightning-utilities==0.15.2 (from -r requirements.txt (line 50))
+  Using cached lightning_utilities-0.15.2-py3-none-any.whl.metadata (5.7 kB)
+Collecting llvmlite==0.44.0 (from -r requirements.txt (line 51))
+  Using cached llvmlite-0.44.0-cp312-cp312-win_amd64.whl.metadata (5.0 kB)
+Collecting lxml==5.3.0 (from -r requirements.txt (line 52))
+  Using cached lxml-5.3.0-cp312-cp312-win_amd64.whl.metadata (3.9 kB)
+Collecting Mako==1.3.10 (from -r requirements.txt (line 53))
+  Using cached mako-1.3.10-py3-none-any.whl.metadata (2.9 kB)
+Collecting markdown-it-py==4.0.0 (from -r requirements.txt (line 54))
+  Using cached markdown_it_py-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+Collecting MarkupSafe==3.0.2 (from -r requirements.txt (line 55))
+  Using cached MarkupSafe-3.0.2-cp312-cp312-win_amd64.whl.metadata (4.1 kB)
+Collecting matplotlib==3.10.5 (from -r requirements.txt (line 56))
+  Using cached matplotlib-3.10.5-cp312-cp312-win_amd64.whl.metadata (11 kB)
+Collecting mdurl==0.1.2 (from -r requirements.txt (line 57))
+  Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting mock==5.1.0 (from -r requirements.txt (line 58))
+  Using cached mock-5.1.0-py3-none-any.whl.metadata (3.0 kB)
+Collecting mpmath==1.3.0 (from -r requirements.txt (line 59))
+  Using cached mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting msgpack==1.1.1 (from -r requirements.txt (line 60))
+  Using cached msgpack-1.1.1-cp312-cp312-win_amd64.whl.metadata (8.6 kB)
+Collecting multidict==6.6.4 (from -r requirements.txt (line 61))
+  Using cached multidict-6.6.4-cp312-cp312-win_amd64.whl.metadata (5.4 kB)
+Collecting networkx==3.5 (from -r requirements.txt (line 62))
+  Using cached networkx-3.5-py3-none-any.whl.metadata (6.3 kB)
+Collecting nltk==3.9.1 (from -r requirements.txt (line 63))
+  Using cached nltk-3.9.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting numba==0.61.2 (from -r requirements.txt (line 64))
+  Using cached numba-0.61.2-cp312-cp312-win_amd64.whl.metadata (2.9 kB)
+Collecting numpy==2.2.6 (from -r requirements.txt (line 65))
+  Using cached numpy-2.2.6-cp312-cp312-win_amd64.whl.metadata (60 kB)
+Collecting omegaconf==2.3.0 (from -r requirements.txt (line 66))
+  Using cached omegaconf-2.3.0-py3-none-any.whl.metadata (3.9 kB)
+Collecting onnxruntime==1.22.1 (from -r requirements.txt (line 67))
+  Using cached onnxruntime-1.22.1-cp312-cp312-win_amd64.whl.metadata (5.1 kB)
+Collecting optuna==4.5.0 (from -r requirements.txt (line 68))
+  Using cached optuna-4.5.0-py3-none-any.whl.metadata (17 kB)
+Requirement already satisfied: packaging==25.0 in c:\users\shogo\documents\vscode\remoteapi\remoteapi\venv\lib\site-packages (from -r requirements.txt (line 69)) (25.0)
+Collecting pandas==2.3.2 (from -r requirements.txt (line 70))
+  Using cached pandas-2.3.2-cp312-cp312-win_amd64.whl.metadata (19 kB)
+Collecting parse==1.20.2 (from -r requirements.txt (line 71))
+  Using cached parse-1.20.2-py2.py3-none-any.whl.metadata (22 kB)
+Collecting pillow==11.3.0 (from -r requirements.txt (line 72))
+  Using cached pillow-11.3.0-cp312-cp312-win_amd64.whl.metadata (9.2 kB)
+Collecting platformdirs==4.3.8 (from -r requirements.txt (line 73))
+  Using cached platformdirs-4.3.8-py3-none-any.whl.metadata (12 kB)
+Collecting pooch==1.8.2 (from -r requirements.txt (line 74))
+  Using cached pooch-1.8.2-py3-none-any.whl.metadata (10 kB)
+Collecting primePy==1.3 (from -r requirements.txt (line 75))
+  Using cached primePy-1.3-py3-none-any.whl.metadata (4.8 kB)
+Collecting propcache==0.3.2 (from -r requirements.txt (line 76))
+  Using cached propcache-0.3.2-cp312-cp312-win_amd64.whl.metadata (12 kB)
+Collecting protobuf==6.32.0 (from -r requirements.txt (line 77))
+  Using cached protobuf-6.32.0-cp310-abi3-win_amd64.whl.metadata (593 bytes)
+Collecting pyannote.audio==3.3.2 (from -r requirements.txt (line 78))
+  Using cached pyannote_audio-3.3.2-py2.py3-none-any.whl.metadata (11 kB)
+Collecting pyannote.core==5.0.0 (from -r requirements.txt (line 79))
+  Using cached pyannote.core-5.0.0-py3-none-any.whl.metadata (1.4 kB)
+Collecting pyannote.database==5.1.3 (from -r requirements.txt (line 80))
+  Using cached pyannote.database-5.1.3-py3-none-any.whl.metadata (1.1 kB)
+Collecting pyannote.metrics==3.2.1 (from -r requirements.txt (line 81))
+  Using cached pyannote.metrics-3.2.1-py3-none-any.whl.metadata (1.3 kB)
+Collecting pyannote.pipeline==3.0.1 (from -r requirements.txt (line 82))
+  Using cached pyannote.pipeline-3.0.1-py3-none-any.whl.metadata (897 bytes)
+Collecting pyasn1==0.6.1 (from -r requirements.txt (line 83))
+  Using cached pyasn1-0.6.1-py3-none-any.whl.metadata (8.4 kB)
+Collecting pycparser==2.22 (from -r requirements.txt (line 84))
+  Using cached pycparser-2.22-py3-none-any.whl.metadata (943 bytes)
+Collecting pycryptodomex==3.19.0 (from -r requirements.txt (line 85))
+  Using cached pycryptodomex-3.19.0-cp35-abi3-win_amd64.whl.metadata (3.4 kB)
+Collecting pyee==11.1.0 (from -r requirements.txt (line 86))
+  Using cached pyee-11.1.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting Pygments==2.19.2 (from -r requirements.txt (line 87))
+  Using cached pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+Collecting pyparsing==3.2.3 (from -r requirements.txt (line 88))
+  Using cached pyparsing-3.2.3-py3-none-any.whl.metadata (5.0 kB)
+Collecting pyppeteer==2.0.0 (from -r requirements.txt (line 89))
+  Using cached pyppeteer-2.0.0-py3-none-any.whl.metadata (7.1 kB)
+Collecting pyquery==2.0.0 (from -r requirements.txt (line 90))
+  Using cached pyquery-2.0.0-py3-none-any.whl.metadata (9.0 kB)
+Collecting pyreadline3==3.5.4 (from -r requirements.txt (line 91))
+  Using cached pyreadline3-3.5.4-py3-none-any.whl.metadata (4.7 kB)
+Collecting pyserial==3.5 (from -r requirements.txt (line 92))
+  Using cached pyserial-3.5-py2.py3-none-any.whl.metadata (1.6 kB)
+Collecting PySide6==6.6.1 (from -r requirements.txt (line 93))
+  Using cached PySide6-6.6.1-cp38-abi3-win_amd64.whl.metadata (5.4 kB)
+Collecting PySide6-Addons==6.6.1 (from -r requirements.txt (line 94))
+  Using cached PySide6_Addons-6.6.1-cp38-abi3-win_amd64.whl.metadata (4.0 kB)
+Collecting PySide6-Essentials==6.6.1 (from -r requirements.txt (line 95))
+  Using cached PySide6_Essentials-6.6.1-cp38-abi3-win_amd64.whl.metadata (3.7 kB)
+ERROR: Ignored the following versions that require a different python version: 0.36.0 Requires-Python >=3.6,<3.10; 0.37.0 Requires-Python >=3.7,<3.10; 0.38.0 Requires-Python >=3.7,<3.11; 0.38.1 Requires-Python >=3.7,<3.11; 0.52.0 Requires-Python >=3.6,<3.9; 0.52.0rc3 Requires-Python >=3.6,<3.9; 0.53.0 Requires-Python >=3.6,<3.10; 0.53.0rc1.post1 Requires-Python >=3.6,<3.10; 0.53.0rc2 Requires-Python >=3.6,<3.10; 0.53.0rc3 Requires-Python >=3.6,<3.10; 0.53.1 Requires-Python >=3.6,<3.10; 0.54.0 Requires-Python >=3.7,<3.10; 0.54.0rc2 Requires-Python >=3.7,<3.10; 0.54.0rc3 Requires-Python >=3.7,<3.10; 0.54.1 Requires-Python >=3.7,<3.10; 0.55.0 Requires-Python >=3.7,<3.11; 0.55.0rc1 Requires-Python >=3.7,<3.11; 0.55.1 Requires-Python >=3.7,<3.11; 0.55.2 Requires-Python >=3.7,<3.11; 1.21.2 Requires-Python >=3.7,<3.11; 1.21.3 Requires-Python >=3.7,<3.11; 1.21.4 Requires-Python >=3.7,<3.11; 1.21.5 Requires-Python >=3.7,<3.11; 1.21.6 Requires-Python >=3.7,<3.11; 6.3.0 Requires-Python >=3.6,<3.11; 6.3.1 Requires-Python >=3.6,<3.11; 6.3.2 Requires-Python >=3.6,<3.11; 6.4.0.1 Requires-Python >=3.7,<3.12; 6.4.1 Requires-Python >=3.7,<3.12; 6.4.2 Requires-Python >=3.7,<3.12; 6.4.3 Requires-Python >=3.7,<3.12; 6.5.0 Requires-Python >=3.7,<3.12; 6.5.1 Requires-Python >=3.7,<3.12; 6.5.1.1 Requires-Python >=3.7,<3.12; 6.5.2 Requires-Python >=3.7,<3.12; 6.5.3 Requires-Python >=3.7,<3.12
+ERROR: Could not find a version that satisfies the requirement PySimpleGUI==5.0.10 (from versions: 5.0.8.2, 5.0.8.3)
+ERROR: No matching distribution found for PySimpleGUI==5.0.10
+Running PyInstaller for Server...
+187 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.11
+188 INFO: Python: 3.12.1
+217 INFO: Platform: Windows-11-10.0.22631-SP0
+217 INFO: Python environment: C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\venv
+219 INFO: wrote C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\YtDlpApiServer.spec
+223 INFO: Removing temporary files and cleaning cache in C:\Users\Shogo\AppData\Local\pyinstaller
+226 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Scripts\\pyinstaller.exe',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\python312.zip',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\DLLs',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\Lib',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi']
+807 INFO: checking Analysis
+807 INFO: Building Analysis because Analysis-00.toc is non existent
+807 INFO: Looking for Python shared library...
+807 INFO: Using Python shared library: C:\Users\Shogo\AppData\Local\Programs\Python\Python312\python312.dll
+807 INFO: Running Analysis Analysis-00.toc
+807 INFO: Target bytecode optimization level: 0
+807 INFO: Initializing module dependency graph...
+809 INFO: Initializing module graph hook caches...
+826 INFO: Analyzing modules for base_library.zip ...
+2388 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+3920 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+4893 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+5292 INFO: Caching module dependency graph...
+5332 INFO: Analyzing C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\main.py
+5743 INFO: Processing standard module hook 'hook-pydantic.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+6279 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+6281 INFO: SetuptoolsInfo: initializing cached setuptools info...
+10852 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10928 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11167 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11661 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+11990 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+12016 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+12878 INFO: Processing standard module hook 'hook-anyio.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14595 INFO: Processing standard module hook 'hook-yt_dlp.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\yt_dlp\\__pyinstaller'
+14824 WARNING: collect_data_files - skipping data collection for module 'curl_cffi' as it is not a package.
+14825 WARNING: collect_data_files - skipping data collection for module 'yt_dlp_ejs' as it is not a package.
+15193 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+15490 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+15509 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+23699 INFO: Processing standard module hook 'hook-uvicorn.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+24582 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25449 INFO: Processing standard module hook 'hook-cryptography.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+27329 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+27768 INFO: Processing module hooks (post-graph stage)...
+28163 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28165 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+28170 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+28185 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28213 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28214 INFO: Setuptools: 'jaraco' appears to be a partial setuptools-vendored copy - extending search paths to ['C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\jaraco', 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco']!
+28215 INFO: Processing pre-safe-import-module hook 'hook-jaraco.functools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28227 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28468 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28611 INFO: Processing pre-safe-import-module hook 'hook-jaraco.text.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28612 INFO: Setuptools: 'jaraco.text' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco.text'!
+28624 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+28626 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28628 INFO: Processing pre-safe-import-module hook 'hook-jaraco.context.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28637 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28638 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+28805 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28806 INFO: Setuptools: 'importlib_metadata' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.importlib_metadata'!
+28831 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+28834 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28834 INFO: Setuptools: 'zipp' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.zipp'!
+29559 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+29559 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+29837 WARNING: Hidden import "tzdata" not found!
+30357 INFO: Performing binary vs. data reclassification (19 entries)
+30361 INFO: Looking for ctypes DLLs
+30489 INFO: Analyzing run-time hooks ...
+30498 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30500 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+30501 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30504 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30507 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+30538 INFO: Creating base_library.zip...
+30562 INFO: Looking for dynamic libraries
+32159 INFO: Extra DLL search directories (AddDllDirectory): []
+32159 INFO: Extra DLL search directories (PATH): []
+32609 INFO: Warnings written to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\warn-YtDlpApiServer.txt
+32795 INFO: Graph cross-reference written to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\xref-YtDlpApiServer.html
+32859 INFO: checking PYZ
+32859 INFO: Building PYZ because PYZ-00.toc is non existent
+32859 INFO: Building PYZ (ZlibArchive) C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\PYZ-00.pyz
+33992 INFO: Building PYZ (ZlibArchive) C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\YtDlpApiServer\PYZ-00.pyz completed successfully.
+34037 INFO: checking PKG
+34037 INFO: Building PKG because PKG-00.toc is non existent
+34037 INFO: Building PKG (CArchive) YtDlpApiServer.pkg
+38363 INFO: Building PKG (CArchive) YtDlpApiServer.pkg completed successfully.
+38366 INFO: Bootloader C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\venv\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+38366 INFO: checking EXE
+38366 INFO: Building EXE because EXE-00.toc is non existent
+38366 INFO: Building EXE from EXE-00.toc
+38368 INFO: Copying bootloader EXE to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\dist\YtDlpApiServer.exe
+38493 INFO: Copying icon to EXE
+38567 INFO: Copying 0 resources to EXE
+38567 INFO: Embedding manifest in EXE
+38618 INFO: Appending PKG archive to EXE
+38722 INFO: Fixing EXE headers
+40874 INFO: Building EXE from EXE-00.toc completed successfully.
+40878 INFO: Build complete! The results are available in: C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\dist
+Adding imports: ['yt_dlp.compat._legacy', 'yt_dlp.compat._deprecated', 'yt_dlp.utils._legacy', 'yt_dlp.utils._deprecated', 'Cryptodome', 'mutagen', 'brotli', 'certifi', 'secretstorage', 'curl_cffi']
+Creating release package...
+
+Downloading FFmpeg...
+Extracting FFmpeg...
+        1 dir(s) moved.
+        1 file(s) copied.
+Copying files to release staging...
+        1 file(s) copied.
+        1 file(s) moved.
+        1 file(s) moved.
+        1 file(s) moved.
+static\index.html
+static\login.html
+static\manifest.json
+static\sw.js
+4 File(s) copied
+        1 file(s) copied.
+        1 file(s) copied.
+        1 file(s) copied.
+        1 file(s) copied.
+Building Installer...
+226 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.11
+226 INFO: Python: 3.12.1
+262 INFO: Platform: Windows-11-10.0.22631-SP0
+262 INFO: Python environment: C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\venv
+263 INFO: wrote C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\Setup.spec
+267 INFO: Removing temporary files and cleaning cache in C:\Users\Shogo\AppData\Local\pyinstaller
+273 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Scripts\\pyinstaller.exe',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\python312.zip',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\DLLs',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312\\Lib',
+ 'C:\\Users\\Shogo\\AppData\\Local\\Programs\\Python\\Python312',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages',
+ 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi']
+1044 INFO: Appending 'datas' from .spec
+1045 INFO: checking Analysis
+1045 INFO: Building Analysis because Analysis-00.toc is non existent
+1045 INFO: Looking for Python shared library...
+1045 INFO: Using Python shared library: C:\Users\Shogo\AppData\Local\Programs\Python\Python312\python312.dll
+1045 INFO: Running Analysis Analysis-00.toc
+1045 INFO: Target bytecode optimization level: 0
+1045 INFO: Initializing module dependency graph...
+1047 INFO: Initializing module graph hook caches...
+1066 INFO: Analyzing modules for base_library.zip ...
+2524 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+4192 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+5080 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+5550 INFO: Caching module dependency graph...
+5603 INFO: Analyzing C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\installer.py
+5614 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+5615 INFO: TclTkInfo: initializing cached Tcl/Tk info...
+6001 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6088 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6123 INFO: Processing module hooks (post-graph stage)...
+6126 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6140 INFO: Performing binary vs. data reclassification (936 entries)
+6518 INFO: Looking for ctypes DLLs
+6526 INFO: Analyzing run-time hooks ...
+6527 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+6530 INFO: Including run-time hook 'pyi_rth__tkinter.py' from 'C:\\Users\\Shogo\\Documents\\vscode\\remoteapi\\remoteapi\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+6557 INFO: Creating base_library.zip...
+6578 INFO: Looking for dynamic libraries
+6779 INFO: Extra DLL search directories (AddDllDirectory): []
+6780 INFO: Extra DLL search directories (PATH): []
+7256 INFO: Warnings written to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\Setup\warn-Setup.txt
+7275 INFO: Graph cross-reference written to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\Setup\xref-Setup.html
+7317 INFO: checking PYZ
+7317 INFO: Building PYZ because PYZ-00.toc is non existent
+7317 INFO: Building PYZ (ZlibArchive) C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\Setup\PYZ-00.pyz
+7462 INFO: Building PYZ (ZlibArchive) C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\build\Setup\PYZ-00.pyz completed successfully.
+7484 INFO: checking PKG
+7484 INFO: Building PKG because PKG-00.toc is non existent
+7484 INFO: Building PKG (CArchive) Setup.pkg
+80384 INFO: Building PKG (CArchive) Setup.pkg completed successfully.
+80406 INFO: Bootloader C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\venv\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+80406 INFO: checking EXE
+80406 INFO: Building EXE because EXE-00.toc is non existent
+80406 INFO: Building EXE from EXE-00.toc
+80422 INFO: Copying bootloader EXE to C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\dist\Setup.exe
+80483 INFO: Copying icon to EXE
+80545 INFO: Copying 0 resources to EXE
+80546 INFO: Embedding manifest in EXE
+80553 INFO: Appending PKG archive to EXE
+80730 INFO: Fixing EXE headers
+91724 INFO: Building EXE from EXE-00.toc completed successfully.
+91747 INFO: Build complete! The results are available in: C:\Users\Shogo\Documents\vscode\remoteapi\remoteapi\dist
+        1 file(s) copied.
+The system cannot find the file specified.
+
+========================================================
+Build Complete!
+
+The "release" folder now contains:
+ - Setup.exe (Single-file Installer)
+
+Run Setup.exe to install the server.
+========================================================
+
