@@ -82,7 +82,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.10")
+app = FastAPI(title="yt-dlp API Server", version="8.4.11")
 
 @app.on_event("startup")
 async def startup_event():
@@ -931,7 +931,7 @@ async def stream_video(url: str, request: Request):
     """
     try:
         ydl_opts = {
-            'format': 'best', 
+            'format': 'best[ext=mp4]/best', 
             'quiet': True,
             'cachedir': False,
             # 'extractor_args': {'youtube': {'player_client': ['tv']}},
@@ -967,9 +967,18 @@ async def stream_video(url: str, request: Request):
             
             # Since stream_response closes the response, we should be careful.
             
+            # Use headers from yt-dlp info if available, or default
+            headers = info.get('http_headers', {})
+            # Ensure User-Agent is set if missing
+            if 'User-Agent' not in headers:
+                 headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
             client = httpx.AsyncClient(verify=False, follow_redirects=True)
-            req_stream = client.build_request("GET", stream_url)
+            req_stream = client.build_request("GET", stream_url, headers=headers)
             r = await client.send(req_stream, stream=True)
+            
+            msg = f"Proxying Stream: {stream_url[:50]}... Status: {r.status_code} Type: {r.headers.get('content-type')}"
+            logging.info(msg)
             
             return StreamingResponse(
                 proxy_service.stream_response(r, request.client.host, limit_bps),
