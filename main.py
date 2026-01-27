@@ -935,6 +935,7 @@ async def stream_video(url: str, request: Request):
             'format': 'best[protocol^=http][ext=mp4]/best[protocol^=http]/best[ext=mp4]/best',
             'quiet': True,
             'cachedir': False,
+            'force_ipv4': True, # Force IPv4 to prevent IP mismatch between yt-dlp extraction and httpx proxying
             # 'extractor_args': {'youtube': {'player_client': ['tv']}},
         }
         
