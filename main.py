@@ -26,6 +26,7 @@ try:
     import uvicorn
     import httpx
     import socket
+    import urllib.parse
     import uuid
     import time
     import asyncio
@@ -935,7 +936,8 @@ async def stream_video(url: str, request: Request):
             'format': 'best[protocol^=http][ext=mp4]/best[protocol^=http]/best[ext=mp4]/best',
             'quiet': True,
             'cachedir': False,
-            'force_ipv4': True, # Force IPv4 to prevent IP mismatch between yt-dlp extraction and httpx proxying
+            'force_ipv4': True, # Prioritize IPv4 for extraction
+            'source_address': '0.0.0.0', # Force binding to IPv4 interface
             # 'extractor_args': {'youtube': {'player_client': ['tv']}},
         }
         
@@ -979,6 +981,24 @@ async def stream_video(url: str, request: Request):
             range_header = request.headers.get('range')
             if range_header:
                 headers['Range'] = range_header
+
+            # FORCE IPv4 Connection for httpx to match yt-dlp's IPv4 extraction
+            try:
+                parsed_url = urllib.parse.urlparse(stream_url)
+                hostname = parsed_url.hostname
+                port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+                
+                # Resolve to IPv4
+                addr_info = socket.getaddrinfo(hostname, port, socket.AF_INET, socket.SOCK_STREAM)
+                if addr_info:
+                    ip_addr = addr_info[0][4][0]
+                    # Replace hostname with IP in URL logic
+                    # httpx does not have a clean way to force IP without Host header manipulation
+                    stream_url = stream_url.replace(hostname, ip_addr, 1)
+                    headers['Host'] = hostname # Ensure SNI/Host matches original
+                    # logging.info(f"Forced IPv4 resolution: {hostname} -> {ip_addr}")
+            except Exception as e:
+                logging.warning(f"Failed to force IPv4 resolution: {e}")
 
             client = httpx.AsyncClient(verify=False, follow_redirects=True)
             req_stream = client.build_request("GET", stream_url, headers=headers)
