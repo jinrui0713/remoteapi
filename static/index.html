@@ -1933,13 +1933,16 @@
                 },
                 streamSearchVideo(res) {
                     this.currentLyrics = '';
-                    this.currentVideoUrl = '/api/stream?url=' + encodeURIComponent(res.url || res.webpage_url);
+                    const targetUrl = res.url || res.webpage_url;
+                    console.log("Streaming Target:", targetUrl);
+                    this.currentVideoUrl = '/api/stream?url=' + encodeURIComponent(targetUrl);
                     const modal = this.getModal('videoModal');
                     if (modal) {
                         modal.show();
                         this.$nextTick(() => {
                             if (this.$refs.videoPlayer) {
                                 this.setupMediaSession(res.title, res.uploader, res.thumbnails);
+                                this.$refs.videoPlayer.load();
                                 this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
                             }
                         });
