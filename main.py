@@ -17,7 +17,7 @@ logging.basicConfig(
 logging.info("Starting server initialization...")
 
 try:
-    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Request, Response, Depends, Form, Body
+    from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Request, Response, Depends, Form, Body, WebSocket, WebSocketDisconnect
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, JSONResponse
@@ -35,9 +35,11 @@ try:
     import shutil
     import aiofiles # Added for async file reading
     import zipfile # Added for bulk download
-    import io 
+    import io
+    import json
+    import random
     from concurrent.futures import ThreadPoolExecutor
-    from typing import Dict, List, Optional
+    from typing import Dict, List, Optional, Set
     from yt_dlp.utils import sanitize_filename
     import db_utils
     # Import external downloaders
@@ -83,7 +85,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.6.1")
+app = FastAPI(title="yt-dlp API Server", version="8.7.0")
 
 @app.on_event("startup")
 async def startup_event():
@@ -2349,6 +2351,630 @@ async def update_beta(version: str):
     except Exception as e:
         logging.error(f"Beta update failed to start: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start beta update: {str(e)}")
+
+
+# ============================================================
+# 早押しクイズ機能 (みんはや風)
+# ============================================================
+
+# --- クイズデータ管理 ---
+HAYAOSHI_QUESTIONS_PATH = os.path.join(execution_dir, "data", "quiz", "hayaoshi-questions.json")
+
+def load_hayaoshi_questions():
+    """早押しクイズの問題を読み込む"""
+    try:
+        if os.path.exists(HAYAOSHI_QUESTIONS_PATH):
+            with open(HAYAOSHI_QUESTIONS_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        logging.error(f"Failed to load hayaoshi questions: {e}")
+    return []
+
+# --- プレイヤークラス ---
+class QuizPlayer:
+    def __init__(self, ws: WebSocket, player_id: str, name: str):
+        self.ws = ws
+        self.player_id = player_id
+        self.name = name
+        self.score = 0
+        self.rating = 1500  # ELOレーティング初期値
+        self.is_ready = False
+        self.can_answer = True  # この問題で回答権があるか
+        self.ping_ms = 0  # Ping値（遅延補正用）
+        
+    async def send(self, data: dict):
+        try:
+            await self.ws.send_json(data)
+        except Exception:
+            pass
+
+# --- ゲームルームクラス ---
+class QuizRoom:
+    def __init__(self, room_id: str, host_id: str, is_ranked: bool = False):
+        self.room_id = room_id
+        self.host_id = host_id
+        self.is_ranked = is_ranked
+        self.players: Dict[str, QuizPlayer] = {}
+        self.state = "waiting"  # waiting, playing, finished
+        self.questions: List[dict] = []
+        self.current_question_index = 0
+        self.current_question_text = ""
+        self.revealed_chars = 0
+        self.answering_player_id: Optional[str] = None
+        self.answer_start_time: Optional[float] = None
+        self.question_start_time: Optional[float] = None
+        self.buzz_times: Dict[str, float] = {}  # プレイヤーごとのボタン押下時刻
+        self.max_questions = 10
+        self.char_reveal_task: Optional[asyncio.Task] = None
+        self.created_at = time.time()
+        
+    async def broadcast(self, data: dict, exclude: Optional[str] = None):
+        """全プレイヤーにメッセージを送信"""
+        for pid, player in self.players.items():
+            if exclude and pid == exclude:
+                continue
+            await player.send(data)
+    
+    def get_player_list(self):
+        """プレイヤー一覧を取得"""
+        return [
+            {
+                "id": p.player_id,
+                "name": p.name,
+                "score": p.score,
+                "rating": p.rating,
+                "isReady": p.is_ready,
+                "isHost": p.player_id == self.host_id
+            }
+            for p in self.players.values()
+        ]
+    
+    def all_ready(self):
+        """全員準備完了か確認"""
+        if len(self.players) < 2:
+            return False
+        return all(p.is_ready for p in self.players.values())
+    
+    async def start_game(self):
+        """ゲーム開始"""
+        self.state = "playing"
+        all_questions = load_hayaoshi_questions()
+        if len(all_questions) < self.max_questions:
+            self.questions = all_questions
+        else:
+            self.questions = random.sample(all_questions, self.max_questions)
+        self.current_question_index = 0
+        
+        await self.broadcast({
+            "type": "game_start",
+            "totalQuestions": len(self.questions)
+        })
+        
+        await asyncio.sleep(2)  # カウントダウン
+        await self.next_question()
+    
+    async def next_question(self):
+        """次の問題へ"""
+        if self.current_question_index >= len(self.questions):
+            await self.end_game()
+            return
+            
+        q = self.questions[self.current_question_index]
+        self.current_question_text = q["question"]
+        self.revealed_chars = 0
+        self.answering_player_id = None
+        self.buzz_times = {}
+        self.question_start_time = time.time()
+        
+        # 全プレイヤーの回答権をリセット
+        for p in self.players.values():
+            p.can_answer = True
+        
+        await self.broadcast({
+            "type": "question_start",
+            "questionNumber": self.current_question_index + 1,
+            "totalQuestions": len(self.questions),
+            "category": q.get("category", "")
+        })
+        
+        # 文字を1文字ずつ送信開始
+        self.char_reveal_task = asyncio.create_task(self.reveal_chars())
+    
+    async def reveal_chars(self):
+        """問題文を1文字ずつ公開"""
+        try:
+            for i, char in enumerate(self.current_question_text):
+                if self.answering_player_id:
+                    # 誰かが回答中なら停止
+                    return
+                
+                self.revealed_chars = i + 1
+                await self.broadcast({
+                    "type": "char",
+                    "char": char,
+                    "index": i
+                })
+                await asyncio.sleep(0.08)  # 1文字0.08秒
+            
+            # 全文表示後、5秒待ってスルー判定
+            await asyncio.sleep(5)
+            if not self.answering_player_id:
+                await self.handle_timeout()
+                
+        except asyncio.CancelledError:
+            pass
+    
+    async def handle_buzz(self, player_id: str, client_timestamp: float):
+        """早押しボタン処理"""
+        if self.answering_player_id:
+            return  # 既に誰か回答中
+            
+        player = self.players.get(player_id)
+        if not player or not player.can_answer:
+            return
+            
+        # サーバー時刻を記録（Ping補正込み）
+        server_time = time.time()
+        adjusted_time = server_time - (player.ping_ms / 1000 / 2)  # RTT/2を引く
+        self.buzz_times[player_id] = adjusted_time
+        
+        # 少し待って最速を判定（複数人が同時に押した場合の対策）
+        await asyncio.sleep(0.05)
+        
+        if self.answering_player_id:
+            return  # 既に判定済み
+            
+        # 最速のプレイヤーを選出
+        if self.buzz_times:
+            fastest_id = min(self.buzz_times, key=self.buzz_times.get)
+            self.answering_player_id = fastest_id
+            self.answer_start_time = time.time()
+            
+            # 文字表示を停止
+            if self.char_reveal_task:
+                self.char_reveal_task.cancel()
+            
+            await self.broadcast({
+                "type": "buzz_accepted",
+                "playerId": fastest_id,
+                "playerName": self.players[fastest_id].name,
+                "revealedText": self.current_question_text[:self.revealed_chars]
+            })
+            
+            # 回答用の文字パネルを生成して送信
+            q = self.questions[self.current_question_index]
+            panels = self.generate_char_panels(q["reading"])
+            await self.players[fastest_id].send({
+                "type": "show_panels",
+                "panels": panels,
+                "answerLength": len(q["reading"])
+            })
+    
+    def generate_char_panels(self, reading: str) -> List[str]:
+        """文字パネルを生成（正解文字 + ダミー文字）"""
+        # ひらがな一覧
+        hiragana = list("あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん")
+        hiragana += list("がぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽ")
+        hiragana += list("ぁぃぅぇぉっゃゅょー")
+        
+        # 正解の文字
+        answer_chars = list(reading)
+        
+        # ダミー文字を追加（合計12〜16文字）
+        target_count = random.randint(12, 16)
+        dummy_count = max(0, target_count - len(answer_chars))
+        
+        # 正解に含まれない文字からダミーを選ぶ
+        available_dummies = [c for c in hiragana if c not in answer_chars]
+        dummies = random.sample(available_dummies, min(dummy_count, len(available_dummies)))
+        
+        # 全パネルをシャッフル
+        all_panels = answer_chars + dummies
+        random.shuffle(all_panels)
+        
+        return all_panels
+    
+    async def handle_answer(self, player_id: str, answer: str):
+        """回答を処理"""
+        if self.answering_player_id != player_id:
+            return
+            
+        q = self.questions[self.current_question_index]
+        correct_reading = q["reading"]
+        
+        # 正誤判定（読み仮名で比較）
+        # カタカナ→ひらがな変換
+        answer_normalized = answer.translate(str.maketrans(
+            'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポァィゥェォッャュョー',
+            'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽぁぃぅぇぉっゃゅょー'
+        ))
+        
+        is_correct = answer_normalized == correct_reading
+        
+        player = self.players[player_id]
+        
+        if is_correct:
+            # 正解
+            points = q.get("points", 10)
+            player.score += points
+            
+            await self.broadcast({
+                "type": "answer_result",
+                "correct": True,
+                "playerId": player_id,
+                "playerName": player.name,
+                "answer": q["answer"],
+                "reading": q["reading"],
+                "points": points,
+                "scores": {p.player_id: p.score for p in self.players.values()}
+            })
+            
+            # 次の問題へ
+            await asyncio.sleep(2)
+            self.current_question_index += 1
+            self.answering_player_id = None
+            await self.next_question()
+            
+        else:
+            # 不正解
+            player.can_answer = False  # この問題の回答権を剥奪
+            player.score = max(0, player.score - 5)  # 減点
+            
+            await self.broadcast({
+                "type": "answer_result",
+                "correct": False,
+                "playerId": player_id,
+                "playerName": player.name,
+                "wrongAnswer": answer,
+                "scores": {p.player_id: p.score for p in self.players.values()}
+            })
+            
+            self.answering_player_id = None
+            self.buzz_times = {}
+            
+            # 回答権のあるプレイヤーがいるか確認
+            remaining = [p for p in self.players.values() if p.can_answer]
+            if remaining:
+                # 問題文の表示を再開
+                await asyncio.sleep(1)
+                self.char_reveal_task = asyncio.create_task(self.continue_reveal())
+            else:
+                # 全員不正解 → スルー
+                await self.handle_timeout()
+    
+    async def continue_reveal(self):
+        """問題文の残りを表示"""
+        try:
+            for i in range(self.revealed_chars, len(self.current_question_text)):
+                if self.answering_player_id:
+                    return
+                    
+                char = self.current_question_text[i]
+                self.revealed_chars = i + 1
+                await self.broadcast({
+                    "type": "char",
+                    "char": char,
+                    "index": i
+                })
+                await asyncio.sleep(0.08)
+            
+            await asyncio.sleep(5)
+            if not self.answering_player_id:
+                await self.handle_timeout()
+                
+        except asyncio.CancelledError:
+            pass
+    
+    async def handle_timeout(self):
+        """タイムアウト（スルー）処理"""
+        q = self.questions[self.current_question_index]
+        
+        await self.broadcast({
+            "type": "timeout",
+            "answer": q["answer"],
+            "reading": q["reading"],
+            "fullQuestion": q["question"]
+        })
+        
+        await asyncio.sleep(3)
+        self.current_question_index += 1
+        self.answering_player_id = None
+        await self.next_question()
+    
+    async def end_game(self):
+        """ゲーム終了"""
+        self.state = "finished"
+        
+        # 順位を計算
+        sorted_players = sorted(self.players.values(), key=lambda p: p.score, reverse=True)
+        rankings = [
+            {"rank": i + 1, "id": p.player_id, "name": p.name, "score": p.score}
+            for i, p in enumerate(sorted_players)
+        ]
+        
+        # ELOレーティング更新（ランクマッチの場合）
+        if self.is_ranked and len(sorted_players) >= 2:
+            winner = sorted_players[0]
+            loser = sorted_players[1]
+            # 簡易ELO計算
+            k = 32
+            expected_winner = 1 / (1 + 10 ** ((loser.rating - winner.rating) / 400))
+            winner.rating += int(k * (1 - expected_winner))
+            loser.rating += int(k * (0 - (1 - expected_winner)))
+        
+        await self.broadcast({
+            "type": "game_end",
+            "rankings": rankings
+        })
+
+
+# --- ルーム管理 ---
+quiz_rooms: Dict[str, QuizRoom] = {}
+matchmaking_queue: List[QuizPlayer] = []
+
+
+@app.get("/api/quiz/rooms")
+async def get_quiz_rooms():
+    """公開ルーム一覧を取得"""
+    rooms = []
+    for room_id, room in quiz_rooms.items():
+        if room.state == "waiting":
+            rooms.append({
+                "id": room_id,
+                "playerCount": len(room.players),
+                "isRanked": room.is_ranked,
+                "createdAt": room.created_at
+            })
+    return {"rooms": rooms}
+
+
+@app.post("/api/quiz/rooms")
+async def create_quiz_room(request: Request):
+    """新しいルームを作成"""
+    data = await request.json()
+    room_id = secrets.token_urlsafe(6)
+    host_id = data.get("hostId", secrets.token_urlsafe(8))
+    is_ranked = data.get("isRanked", False)
+    
+    room = QuizRoom(room_id, host_id, is_ranked)
+    quiz_rooms[room_id] = room
+    
+    return {"roomId": room_id, "hostId": host_id}
+
+
+@app.get("/api/quiz/questions")
+async def get_quiz_questions_list():
+    """早押しクイズの問題一覧を取得（管理用）"""
+    questions = load_hayaoshi_questions()
+    return {"questions": questions, "count": len(questions)}
+
+
+@app.post("/api/quiz/questions")
+async def add_quiz_question(request: Request):
+    """新しい問題を追加"""
+    data = await request.json()
+    
+    # バリデーション
+    required = ["question", "answer", "reading"]
+    for field in required:
+        if field not in data:
+            raise HTTPException(status_code=400, detail=f"Missing field: {field}")
+    
+    questions = load_hayaoshi_questions()
+    
+    # 新しいIDを生成
+    new_id = f"h{len(questions) + 1:03d}"
+    
+    new_question = {
+        "id": new_id,
+        "category": data.get("category", "ユーザー投稿"),
+        "difficulty": data.get("difficulty", "Normal"),
+        "question": data["question"],
+        "answer": data["answer"],
+        "reading": data["reading"],
+        "points": data.get("points", 10)
+    }
+    
+    questions.append(new_question)
+    
+    # 保存
+    os.makedirs(os.path.dirname(HAYAOSHI_QUESTIONS_PATH), exist_ok=True)
+    with open(HAYAOSHI_QUESTIONS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(questions, f, ensure_ascii=False, indent=2)
+    
+    return {"success": True, "question": new_question}
+
+
+@app.post("/api/quiz/questions/import")
+async def import_quiz_questions(file: UploadFile = File(...)):
+    """CSVファイルから問題をインポート"""
+    import csv
+    from io import StringIO
+    
+    content = await file.read()
+    text = content.decode('utf-8-sig')  # BOM対応
+    
+    reader = csv.DictReader(StringIO(text))
+    
+    questions = load_hayaoshi_questions()
+    imported_count = 0
+    
+    for row in reader:
+        if "question" in row and "answer" in row and "reading" in row:
+            new_id = f"h{len(questions) + 1:03d}"
+            new_question = {
+                "id": new_id,
+                "category": row.get("category", "インポート"),
+                "difficulty": row.get("difficulty", "Normal"),
+                "question": row["question"],
+                "answer": row["answer"],
+                "reading": row["reading"],
+                "points": int(row.get("points", 10))
+            }
+            questions.append(new_question)
+            imported_count += 1
+    
+    # 保存
+    os.makedirs(os.path.dirname(HAYAOSHI_QUESTIONS_PATH), exist_ok=True)
+    with open(HAYAOSHI_QUESTIONS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(questions, f, ensure_ascii=False, indent=2)
+    
+    return {"success": True, "importedCount": imported_count}
+
+
+@app.websocket("/ws/quiz/{room_id}")
+async def quiz_websocket(websocket: WebSocket, room_id: str):
+    """クイズルームのWebSocket接続"""
+    await websocket.accept()
+    
+    player: Optional[QuizPlayer] = None
+    room: Optional[QuizRoom] = None
+    
+    try:
+        # 初期接続メッセージを待つ
+        init_data = await websocket.receive_json()
+        
+        if init_data.get("type") != "join":
+            await websocket.close(code=4000, reason="Invalid init message")
+            return
+        
+        player_id = init_data.get("playerId", secrets.token_urlsafe(8))
+        player_name = init_data.get("name", f"ゲスト{random.randint(1000, 9999)}")
+        
+        # ルームを取得または作成
+        if room_id == "matchmaking":
+            # ランダムマッチ
+            player = QuizPlayer(websocket, player_id, player_name)
+            matchmaking_queue.append(player)
+            
+            await player.send({"type": "matchmaking_start"})
+            
+            # マッチング待機
+            while len(matchmaking_queue) < 2:
+                await asyncio.sleep(0.5)
+                # 接続確認
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except:
+                    matchmaking_queue.remove(player)
+                    return
+            
+            # 2人揃ったらルーム作成
+            if player in matchmaking_queue:
+                if matchmaking_queue[0] == player:
+                    # 最初のプレイヤーがホストとしてルーム作成
+                    new_room_id = secrets.token_urlsafe(6)
+                    room = QuizRoom(new_room_id, player_id, is_ranked=True)
+                    quiz_rooms[new_room_id] = room
+                    
+                    # 2人目を取得
+                    p2 = matchmaking_queue[1]
+                    matchmaking_queue.clear()
+                    
+                    # 両方をルームに追加
+                    room.players[player_id] = player
+                    room.players[p2.player_id] = p2
+                    
+                    await player.send({"type": "matched", "roomId": new_room_id})
+                    await p2.send({"type": "matched", "roomId": new_room_id})
+                    
+                    # ロビー情報を送信
+                    await room.broadcast({
+                        "type": "lobby_update",
+                        "players": room.get_player_list()
+                    })
+                else:
+                    # 2人目はホストのルームに参加するのを待つ
+                    await asyncio.sleep(0.5)
+                    return
+        else:
+            # 通常のルーム参加
+            room = quiz_rooms.get(room_id)
+            if not room:
+                # 新規ルーム作成
+                room = QuizRoom(room_id, player_id, is_ranked=False)
+                quiz_rooms[room_id] = room
+            
+            player = QuizPlayer(websocket, player_id, player_name)
+            room.players[player_id] = player
+            
+            await player.send({
+                "type": "joined",
+                "roomId": room_id,
+                "playerId": player_id,
+                "isHost": player_id == room.host_id
+            })
+            
+            await room.broadcast({
+                "type": "lobby_update",
+                "players": room.get_player_list()
+            })
+        
+        # メッセージループ
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+            
+            if msg_type == "ping":
+                # Ping応答 + RTT計測
+                await player.send({"type": "pong", "serverTime": time.time()})
+                
+            elif msg_type == "pong":
+                # クライアントからのPong（RTT計測用）
+                client_time = data.get("clientTime", 0)
+                if client_time:
+                    player.ping_ms = (time.time() - client_time) * 1000
+                    
+            elif msg_type == "ready":
+                # 準備完了
+                player.is_ready = data.get("ready", True)
+                await room.broadcast({
+                    "type": "lobby_update",
+                    "players": room.get_player_list()
+                })
+                
+                # 全員準備完了ならゲーム開始
+                if room.all_ready():
+                    await room.start_game()
+                    
+            elif msg_type == "buzz":
+                # 早押しボタン
+                client_timestamp = data.get("timestamp", time.time())
+                await room.handle_buzz(player_id, client_timestamp)
+                
+            elif msg_type == "answer":
+                # 回答送信
+                answer = data.get("answer", "")
+                await room.handle_answer(player_id, answer)
+                
+            elif msg_type == "chat":
+                # チャットメッセージ
+                await room.broadcast({
+                    "type": "chat",
+                    "playerId": player_id,
+                    "playerName": player.name,
+                    "message": data.get("message", "")
+                })
+                
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logging.error(f"Quiz WebSocket error: {e}")
+    finally:
+        # クリーンアップ
+        if player and player in matchmaking_queue:
+            matchmaking_queue.remove(player)
+        if room and player:
+            room.players.pop(player.player_id, None)
+            if len(room.players) == 0:
+                quiz_rooms.pop(room.room_id, None)
+            else:
+                await room.broadcast({
+                    "type": "player_left",
+                    "playerId": player.player_id,
+                    "players": room.get_player_list()
+                })
+
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

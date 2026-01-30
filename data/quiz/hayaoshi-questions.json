@@ -1,0 +1,362 @@
+[
+  {
+    "id": "h001",
+    "category": "一般常識",
+    "difficulty": "Easy",
+    "question": "1年で最も昼の長さが短い日のことを、何というでしょう？",
+    "answer": "冬至",
+    "reading": "とうじ",
+    "points": 10
+  },
+  {
+    "id": "h002",
+    "category": "地理",
+    "difficulty": "Easy",
+    "question": "日本で最も高い山は何でしょう？",
+    "answer": "富士山",
+    "reading": "ふじさん",
+    "points": 10
+  },
+  {
+    "id": "h003",
+    "category": "科学",
+    "difficulty": "Normal",
+    "question": "水の化学式はH2Oですが、これを日本語で何というでしょう？",
+    "answer": "水",
+    "reading": "みず",
+    "points": 10
+  },
+  {
+    "id": "h004",
+    "category": "歴史",
+    "difficulty": "Normal",
+    "question": "「本能寺の変」で織田信長を討った武将は誰でしょう？",
+    "answer": "明智光秀",
+    "reading": "あけちみつひで",
+    "points": 15
+  },
+  {
+    "id": "h005",
+    "category": "スポーツ",
+    "difficulty": "Easy",
+    "question": "サッカーで、ボールを手で扱うことが許されている唯一のポジションは何でしょう？",
+    "answer": "ゴールキーパー",
+    "reading": "ごーるきーぱー",
+    "points": 10
+  },
+  {
+    "id": "h006",
+    "category": "文学",
+    "difficulty": "Normal",
+    "question": "「吾輩は猫である」の作者は誰でしょう？",
+    "answer": "夏目漱石",
+    "reading": "なつめそうせき",
+    "points": 15
+  },
+  {
+    "id": "h007",
+    "category": "音楽",
+    "difficulty": "Easy",
+    "question": "「運命」や「第九」などの交響曲で知られるドイツの作曲家は誰でしょう？",
+    "answer": "ベートーヴェン",
+    "reading": "べーとーゔぇん",
+    "points": 10
+  },
+  {
+    "id": "h008",
+    "category": "理科",
+    "difficulty": "Normal",
+    "question": "太陽系の惑星のうち、地球の隣に位置し、「明けの明星」「宵の明星」とも呼ばれる惑星は何でしょう？",
+    "answer": "金星",
+    "reading": "きんせい",
+    "points": 15
+  },
+  {
+    "id": "h009",
+    "category": "地理",
+    "difficulty": "Normal",
+    "question": "日本で最も面積が大きい都道府県はどこでしょう？",
+    "answer": "北海道",
+    "reading": "ほっかいどう",
+    "points": 10
+  },
+  {
+    "id": "h010",
+    "category": "歴史",
+    "difficulty": "Hard",
+    "question": "1603年に江戸幕府を開いた武将は誰でしょう？",
+    "answer": "徳川家康",
+    "reading": "とくがわいえやす",
+    "points": 15
+  },
+  {
+    "id": "h011",
+    "category": "アニメ",
+    "difficulty": "Easy",
+    "question": "「ピカチュウ」がマスコットキャラクターとなっている、任天堂のゲームシリーズは何でしょう？",
+    "answer": "ポケットモンスター",
+    "reading": "ぽけっともんすたー",
+    "points": 10
+  },
+  {
+    "id": "h012",
+    "category": "言葉",
+    "difficulty": "Normal",
+    "question": "「青は藍より出でて藍より青し」ということわざの意味として適切なのは、弟子が何を超えることでしょう？",
+    "answer": "師匠",
+    "reading": "ししょう",
+    "points": 15
+  },
+  {
+    "id": "h013",
+    "category": "科学",
+    "difficulty": "Hard",
+    "question": "元素記号「Fe」で表される金属は何でしょう？",
+    "answer": "鉄",
+    "reading": "てつ",
+    "points": 10
+  },
+  {
+    "id": "h014",
+    "category": "スポーツ",
+    "difficulty": "Normal",
+    "question": "野球で、打者が打ったボールがフェアグラウンドを超えてスタンドに入ることを何というでしょう？",
+    "answer": "ホームラン",
+    "reading": "ほーむらん",
+    "points": 10
+  },
+  {
+    "id": "h015",
+    "category": "文学",
+    "difficulty": "Hard",
+    "question": "「源氏物語」の作者は誰でしょう？",
+    "answer": "紫式部",
+    "reading": "むらさきしきぶ",
+    "points": 20
+  },
+  {
+    "id": "h016",
+    "category": "社会",
+    "difficulty": "Easy",
+    "question": "日本の国旗に描かれている円は、何を表しているでしょう？",
+    "answer": "太陽",
+    "reading": "たいよう",
+    "points": 10
+  },
+  {
+    "id": "h017",
+    "category": "地理",
+    "difficulty": "Normal",
+    "question": "世界で最も長い川は何でしょう？",
+    "answer": "ナイル川",
+    "reading": "ないるがわ",
+    "points": 15
+  },
+  {
+    "id": "h018",
+    "category": "歴史",
+    "difficulty": "Hard",
+    "question": "「人間は考える葦である」という言葉を残したフランスの哲学者は誰でしょう？",
+    "answer": "パスカル",
+    "reading": "ぱすかる",
+    "points": 20
+  },
+  {
+    "id": "h019",
+    "category": "音楽",
+    "difficulty": "Normal",
+    "question": "オーケストラで、指揮者が手に持って振る棒を何というでしょう？",
+    "answer": "タクト",
+    "reading": "たくと",
+    "points": 10
+  },
+  {
+    "id": "h020",
+    "category": "理科",
+    "difficulty": "Easy",
+    "question": "地球が太陽の周りを1周するのにかかる時間は、およそ何日でしょう？",
+    "answer": "365日",
+    "reading": "さんびゃくろくじゅうごにち",
+    "points": 10
+  },
+  {
+    "id": "h021",
+    "category": "アニメ",
+    "difficulty": "Easy",
+    "question": "「となりのトトロ」や「千と千尋の神隠し」を制作したアニメスタジオは何でしょう？",
+    "answer": "スタジオジブリ",
+    "reading": "すたじおじぶり",
+    "points": 10
+  },
+  {
+    "id": "h022",
+    "category": "言葉",
+    "difficulty": "Normal",
+    "question": "「猿も木から落ちる」と同じ意味を持つことわざ「弘法も何の誤り」でしょう？",
+    "answer": "筆",
+    "reading": "ふで",
+    "points": 15
+  },
+  {
+    "id": "h023",
+    "category": "科学",
+    "difficulty": "Normal",
+    "question": "光が1年間に進む距離の単位を何というでしょう？",
+    "answer": "光年",
+    "reading": "こうねん",
+    "points": 15
+  },
+  {
+    "id": "h024",
+    "category": "スポーツ",
+    "difficulty": "Easy",
+    "question": "テニスで、サービスが2回連続でフォールトになることを何というでしょう？",
+    "answer": "ダブルフォールト",
+    "reading": "だぶるふぉーると",
+    "points": 10
+  },
+  {
+    "id": "h025",
+    "category": "社会",
+    "difficulty": "Normal",
+    "question": "日本の三権分立で、法律を作る機関は何でしょう？",
+    "answer": "国会",
+    "reading": "こっかい",
+    "points": 15
+  },
+  {
+    "id": "h026",
+    "category": "地理",
+    "difficulty": "Hard",
+    "question": "アフリカ大陸で最も高い山は何でしょう？",
+    "answer": "キリマンジャロ",
+    "reading": "きりまんじゃろ",
+    "points": 20
+  },
+  {
+    "id": "h027",
+    "category": "歴史",
+    "difficulty": "Normal",
+    "question": "「I have a dream」の演説で有名なアメリカの公民権運動指導者は誰でしょう？",
+    "answer": "キング牧師",
+    "reading": "きんぐぼくし",
+    "points": 15
+  },
+  {
+    "id": "h028",
+    "category": "音楽",
+    "difficulty": "Easy",
+    "question": "ピアノの鍵盤は、白鍵と何でできているでしょう？",
+    "answer": "黒鍵",
+    "reading": "こっけん",
+    "points": 10
+  },
+  {
+    "id": "h029",
+    "category": "理科",
+    "difficulty": "Normal",
+    "question": "空気中に最も多く含まれている気体は何でしょう？",
+    "answer": "窒素",
+    "reading": "ちっそ",
+    "points": 15
+  },
+  {
+    "id": "h030",
+    "category": "アニメ",
+    "difficulty": "Normal",
+    "question": "「ドラえもん」の主人公・のび太の苗字は何でしょう？",
+    "answer": "野比",
+    "reading": "のび",
+    "points": 10
+  },
+  {
+    "id": "h031",
+    "category": "言葉",
+    "difficulty": "Hard",
+    "question": "「石の上にも三年」の「三年」は、どのくらいの期間を意味しているでしょう？",
+    "answer": "長い間",
+    "reading": "ながいあいだ",
+    "points": 15
+  },
+  {
+    "id": "h032",
+    "category": "科学",
+    "difficulty": "Hard",
+    "question": "相対性理論を発表した物理学者は誰でしょう？",
+    "answer": "アインシュタイン",
+    "reading": "あいんしゅたいん",
+    "points": 20
+  },
+  {
+    "id": "h033",
+    "category": "スポーツ",
+    "difficulty": "Normal",
+    "question": "オリンピックで使われる五輪マークの輪の数はいくつでしょう？",
+    "answer": "5つ",
+    "reading": "いつつ",
+    "points": 10
+  },
+  {
+    "id": "h034",
+    "category": "社会",
+    "difficulty": "Easy",
+    "question": "日本の首都はどこでしょう？",
+    "answer": "東京",
+    "reading": "とうきょう",
+    "points": 5
+  },
+  {
+    "id": "h035",
+    "category": "地理",
+    "difficulty": "Normal",
+    "question": "日本最長の川は何でしょう？",
+    "answer": "信濃川",
+    "reading": "しなのがわ",
+    "points": 15
+  },
+  {
+    "id": "h036",
+    "category": "歴史",
+    "difficulty": "Hard",
+    "question": "「枕草子」を書いた平安時代の女流作家は誰でしょう？",
+    "answer": "清少納言",
+    "reading": "せいしょうなごん",
+    "points": 20
+  },
+  {
+    "id": "h037",
+    "category": "音楽",
+    "difficulty": "Normal",
+    "question": "音楽で、ド・レ・ミ・ファ・ソ・ラ・シの7つの音を何というでしょう？",
+    "answer": "音階",
+    "reading": "おんかい",
+    "points": 10
+  },
+  {
+    "id": "h038",
+    "category": "理科",
+    "difficulty": "Easy",
+    "question": "植物が光を使って酸素と糖を作り出す働きを何というでしょう？",
+    "answer": "光合成",
+    "reading": "こうごうせい",
+    "points": 10
+  },
+  {
+    "id": "h039",
+    "category": "アニメ",
+    "difficulty": "Easy",
+    "question": "「名探偵コナン」で、主人公の工藤新一が小さくなった姿の名前は何でしょう？",
+    "answer": "江戸川コナン",
+    "reading": "えどがわこなん",
+    "points": 10
+  },
+  {
+    "id": "h040",
+    "category": "言葉",
+    "difficulty": "Normal",
+    "question": "「急がば回れ」の反対の意味を持つことわざ「善は急げ」に続く言葉は何でしょう？",
+    "answer": "悪は延べよ",
+    "reading": "あくはのべよ",
+    "points": 20
+  }
+]
