@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.7")
+app = FastAPI(title="yt-dlp API Server", version="8.5.8")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1814,11 +1814,21 @@ async def proxy_resource(payload: str, request: Request):
         
         resp = await proxy_service.proxy_request(url, client_ip)
         
+        # Filter security headers
+        resp_headers = getattr(resp, 'headers', {}) or {}
+        skip_headers = {
+            'content-security-policy', 'content-security-policy-report-only',
+            'x-content-security-policy', 'x-webkit-csp', 'x-frame-options',
+            'x-xss-protection', 'permissions-policy', 'cross-origin-embedder-policy',
+            'cross-origin-opener-policy', 'cross-origin-resource-policy'
+        }
+        clean_headers = {"Content-Disposition": resp_headers.get("Content-Disposition", "")}
+        
         # Stream response
         return StreamingResponse(
             proxy_service.stream_response(resp, client_ip, limit_bps),
-            media_type=resp.headers.get("content-type", "application/octet-stream"),
-            headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
+            media_type=resp_headers.get("content-type", "application/octet-stream"),
+            headers=clean_headers
         )
     except Exception as e:
         return Response(status_code=404)
@@ -1876,6 +1886,19 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         headers = getattr(resp, 'headers', {}) or {}
         content_type = headers.get("content-type", "")
         
+        # Filter out security headers from proxied response
+        filtered_headers = {}
+        skip_headers = {
+            'content-security-policy', 'content-security-policy-report-only',
+            'x-content-security-policy', 'x-webkit-csp', 'x-frame-options',
+            'x-xss-protection', 'permissions-policy', 'cross-origin-embedder-policy',
+            'cross-origin-opener-policy', 'cross-origin-resource-policy',
+            'strict-transport-security', 'referrer-policy'
+        }
+        for k, v in headers.items():
+            if k.lower() not in skip_headers:
+                filtered_headers[k] = v
+        
         if "text/html" in content_type:
             content = await resp.aread()
             # Log bandwidth for non-streamed content
@@ -1885,10 +1908,12 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
             return Response(content=rewritten, media_type="text/html; charset=utf-8")
         else:
             # Stream other content with limit
+            # Prepare clean headers for streaming response
+            stream_headers = {"Content-Disposition": filtered_headers.get("Content-Disposition", "")}
             return StreamingResponse(
                 proxy_service.stream_response(resp, client_ip, limit_bps),
                 media_type=content_type,
-                headers={"Content-Disposition": headers.get("Content-Disposition", "")}
+                headers=stream_headers
             )
 
     except HTTPException as he:
