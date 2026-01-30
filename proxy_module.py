@@ -629,7 +629,8 @@ class ProxyService:
             total_bytes = 0
             
             # Check content type for HTML
-            content_type = response.headers.get("content-type", "")
+            headers = getattr(response, 'headers', {}) or {}
+            content_type = headers.get("content-type", "")
             base_url = str(response.url)
             
             if "text/html" in content_type:

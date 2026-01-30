@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.1")
+app = FastAPI(title="yt-dlp API Server", version="8.5.2")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1816,7 +1816,8 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
              return Response(content="Access Denied: Your IP is blocked.", status_code=403)
 
         # Rate Limit Check
-        token = request.cookies.get(AUTH_COOKIE_NAME)
+        cookies = getattr(request, 'cookies', {}) or {}
+        token = cookies.get(AUTH_COOKIE_NAME)
         username = None
         role = "guest"
         if token and token in sessions:
