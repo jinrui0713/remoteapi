@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.4")
+app = FastAPI(title="yt-dlp API Server", version="8.5.5")
 
 @app.on_event("startup")
 async def startup_event():
@@ -283,7 +283,28 @@ def check_auth(request: Request):
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
-    # Extremely permissive CSP to allow proxied content and external scripts including extensions
+    
+    # For proxy routes, completely disable all security policies
+    if request.url.path.startswith("/proxy") or request.url.path.startswith("/api/proxy"):
+        # Remove any security headers that could block content
+        headers_to_remove = [
+            "Content-Security-Policy",
+            "Content-Security-Policy-Report-Only",
+            "X-Content-Security-Policy",
+            "X-WebKit-CSP",
+            "X-Frame-Options",
+            "X-XSS-Protection",
+            "Permissions-Policy",
+            "Cross-Origin-Embedder-Policy",
+            "Cross-Origin-Opener-Policy",
+            "Cross-Origin-Resource-Policy"
+        ]
+        for h in headers_to_remove:
+            if h in response.headers:
+                del response.headers[h]
+        return response
+    
+    # For non-proxy routes, set permissive CSP
     response.headers["Content-Security-Policy"] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; connect-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; img-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; frame-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; style-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:;"
     # Remove Permissions-Policy to avoid "Unrecognized feature" errors and blocking legitimate features
     if "Permissions-Policy" in response.headers:

@@ -160,15 +160,31 @@ class ProxyService:
         for ns in soup.find_all('noscript'):
             ns.decompose()
 
-        # Remove likely blocking headers in meta tags
+        # Remove ALL security-related meta tags (CSP, X-Frame-Options, etc.)
+        security_http_equiv = [
+            'content-security-policy',
+            'content-security-policy-report-only',
+            'x-content-security-policy',
+            'x-webkit-csp',
+            'x-frame-options',
+            'x-xss-protection',
+            'permissions-policy',
+            'cross-origin-embedder-policy',
+            'cross-origin-opener-policy',
+            'cross-origin-resource-policy'
+        ]
         for meta in soup.find_all('meta'):
-            if meta.get('http-equiv', '').lower() in ['content-security-policy', 'x-frame-options', 'permissions-policy']:
+            http_equiv = meta.get('http-equiv', '').lower()
+            if http_equiv in security_http_equiv:
                 meta.decompose()
+                continue
             # Remove existing charset declarations to avoid conflicts with our UTF-8 output
             if meta.get('charset'):
                 meta.decompose()
-            if meta.get('http-equiv', '').lower() == 'content-type':
+                continue
+            if http_equiv == 'content-type':
                 meta.decompose()
+                continue
 
         # Inject UTF-8 meta ensures browser uses UTF-8 even if headers are missing
         if soup.head:
