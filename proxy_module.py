@@ -508,18 +508,36 @@ class ProxyService:
         // === FETCH/XHR INTERCEPTOR ===
         // Store the base URL for relative URL resolution
         const PROXY_BASE_URL = '{base_url}';
+        const PROXY_ORIGIN = window.location.origin;
         
-        function resolveUrl(url) {{
-            if (!url) return url;
-            // Already absolute
-            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {{
-                if (url.startsWith('//')) url = 'https:' + url;
+        function shouldProxy(url) {{
+            if (!url) return null;
+            
+            // Data URLs, blob URLs, about:, javascript: - never proxy
+            if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('about:') || url.startsWith('javascript:')) {{
+                return null;
+            }}
+            
+            // Our own API calls - never proxy
+            if (url.includes('/api/proxy/') || url.includes('/api/logs/') || url.includes('/api/client/')) {{
+                return null;
+            }}
+            
+            // Already going to our proxy server - don't double proxy
+            if (url.startsWith(PROXY_ORIGIN)) {{
+                return null;
+            }}
+            
+            // Protocol-relative URLs
+            if (url.startsWith('//')) {{
+                return 'https:' + url;
+            }}
+            
+            // Absolute URLs - proxy them
+            if (url.startsWith('http://') || url.startsWith('https://')) {{
                 return url;
             }}
-            // Data URLs, blob URLs, about: - pass through
-            if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('about:') || url.startsWith('javascript:')) {{
-                return null; // Signal to skip proxy
-            }}
+            
             // Relative URL - resolve against base
             try {{
                 const base = new URL(PROXY_BASE_URL);
@@ -537,10 +555,10 @@ class ProxyService:
         const originalFetch = window.fetch;
         window.fetch = async function(input, init) {{
             let url = typeof input === 'string' ? input : (input.url || input);
-            const resolvedUrl = resolveUrl(url);
+            const proxyUrl = shouldProxy(url);
             
-            // Skip proxying for our own API calls and non-proxyable URLs
-            if (!resolvedUrl || url.includes('/api/proxy/') || url.includes('/api/logs/') || url.includes('/api/client/')) {{
+            // Skip proxying if null returned
+            if (!proxyUrl) {{
                 return originalFetch.apply(this, arguments);
             }}
             
@@ -549,17 +567,17 @@ class ProxyService:
                 const encRes = await originalFetch('/api/proxy/encrypt', {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{url: resolvedUrl}})
+                    body: JSON.stringify({{url: proxyUrl}})
                 }});
                 const encData = await encRes.json();
-                const proxyUrl = '/api/proxy/resource?payload=' + encData.payload;
+                const finalUrl = '/api/proxy/resource?payload=' + encData.payload;
                 
                 // Clone init but update URL
                 if (typeof input === 'string') {{
-                    return originalFetch(proxyUrl, init);
+                    return originalFetch(finalUrl, init);
                 }} else {{
                     // Request object - create new one with proxy URL
-                    const newReq = new Request(proxyUrl, input);
+                    const newReq = new Request(finalUrl, input);
                     return originalFetch(newReq, init);
                 }}
             }} catch (e) {{
@@ -572,15 +590,15 @@ class ProxyService:
         // Override XMLHttpRequest
         const XHROpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, async, user, password) {{
-            const resolvedUrl = resolveUrl(url);
+            const proxyUrl = shouldProxy(url);
             
-            // Skip proxying for our own API calls and non-proxyable URLs
-            if (!resolvedUrl || url.includes('/api/proxy/') || url.includes('/api/logs/') || url.includes('/api/client/')) {{
+            // Skip proxying if null returned
+            if (!proxyUrl) {{
                 return XHROpen.apply(this, arguments);
             }}
             
             // Store original URL for async encryption
-            this._proxyOriginalUrl = resolvedUrl;
+            this._proxyOriginalUrl = proxyUrl;
             this._proxyMethod = method;
             this._proxyAsync = async !== false;
             
@@ -599,10 +617,10 @@ class ProxyService:
                         body: JSON.stringify({{url: this._proxyOriginalUrl}})
                     }});
                     const encData = await encRes.json();
-                    const proxyUrl = '/api/proxy/resource?payload=' + encData.payload;
+                    const finalUrl = '/api/proxy/resource?payload=' + encData.payload;
                     
                     // Re-open with proxy URL
-                    XHROpen.call(this, this._proxyMethod, proxyUrl, this._proxyAsync);
+                    XHROpen.call(this, this._proxyMethod, finalUrl, this._proxyAsync);
                 }} catch (e) {{
                     console.warn('Proxy XHR failed:', e);
                 }}
