@@ -505,6 +505,111 @@ class ProxyService:
              }};
         }};
         
+        // === FETCH/XHR INTERCEPTOR ===
+        // Store the base URL for relative URL resolution
+        const PROXY_BASE_URL = '{base_url}';
+        
+        function resolveUrl(url) {{
+            if (!url) return url;
+            // Already absolute
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {{
+                if (url.startsWith('//')) url = 'https:' + url;
+                return url;
+            }}
+            // Data URLs, blob URLs, about: - pass through
+            if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('about:') || url.startsWith('javascript:')) {{
+                return null; // Signal to skip proxy
+            }}
+            // Relative URL - resolve against base
+            try {{
+                const base = new URL(PROXY_BASE_URL);
+                if (url.startsWith('/')) {{
+                    return base.origin + url;
+                }} else {{
+                    return new URL(url, PROXY_BASE_URL).href;
+                }}
+            }} catch (e) {{
+                return null;
+            }}
+        }}
+        
+        // Override Fetch
+        const originalFetch = window.fetch;
+        window.fetch = async function(input, init) {{
+            let url = typeof input === 'string' ? input : (input.url || input);
+            const resolvedUrl = resolveUrl(url);
+            
+            // Skip proxying for our own API calls and non-proxyable URLs
+            if (!resolvedUrl || url.includes('/api/proxy/') || url.includes('/api/logs/') || url.includes('/api/client/')) {{
+                return originalFetch.apply(this, arguments);
+            }}
+            
+            // Proxy the request
+            try {{
+                const encRes = await originalFetch('/api/proxy/encrypt', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{url: resolvedUrl}})
+                }});
+                const encData = await encRes.json();
+                const proxyUrl = '/api/proxy/resource?payload=' + encData.payload;
+                
+                // Clone init but update URL
+                if (typeof input === 'string') {{
+                    return originalFetch(proxyUrl, init);
+                }} else {{
+                    // Request object - create new one with proxy URL
+                    const newReq = new Request(proxyUrl, input);
+                    return originalFetch(newReq, init);
+                }}
+            }} catch (e) {{
+                // Fallback to original on error
+                console.warn('Proxy fetch failed, trying original:', e);
+                return originalFetch.apply(this, arguments);
+            }}
+        }};
+        
+        // Override XMLHttpRequest
+        const XHROpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, async, user, password) {{
+            const resolvedUrl = resolveUrl(url);
+            
+            // Skip proxying for our own API calls and non-proxyable URLs
+            if (!resolvedUrl || url.includes('/api/proxy/') || url.includes('/api/logs/') || url.includes('/api/client/')) {{
+                return XHROpen.apply(this, arguments);
+            }}
+            
+            // Store original URL for async encryption
+            this._proxyOriginalUrl = resolvedUrl;
+            this._proxyMethod = method;
+            this._proxyAsync = async !== false;
+            
+            // Call with placeholder - will be updated in send()
+            return XHROpen.call(this, method, url, async, user, password);
+        }};
+        
+        const XHRSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = async function(body) {{
+            if (this._proxyOriginalUrl) {{
+                try {{
+                    // Encrypt and redirect
+                    const encRes = await fetch('/api/proxy/encrypt', {{
+                        method: 'POST',
+                        headers: {{'Content-Type': 'application/json'}},
+                        body: JSON.stringify({{url: this._proxyOriginalUrl}})
+                    }});
+                    const encData = await encRes.json();
+                    const proxyUrl = '/api/proxy/resource?payload=' + encData.payload;
+                    
+                    // Re-open with proxy URL
+                    XHROpen.call(this, this._proxyMethod, proxyUrl, this._proxyAsync);
+                }} catch (e) {{
+                    console.warn('Proxy XHR failed:', e);
+                }}
+            }}
+            return XHRSend.call(this, body);
+        }};
+        
         // Simple location override (imperfect but catches some cases)
         // Note: Direct assignment to window.location.href is hard to trap 100% without proxy objects
         

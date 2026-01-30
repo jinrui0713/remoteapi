@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.6")
+app = FastAPI(title="yt-dlp API Server", version="8.5.7")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1970,8 +1970,21 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         return Response(content=error_html, status_code=500, media_type="text/html; charset=utf-8")
 
 @app.get("/proxy")
-async def proxy_get_handler():
-    """Handle GET requests to /proxy gracefully by redirecting or showing message"""
+async def proxy_get_handler(request: Request):
+    """Handle GET requests to /proxy gracefully - these are usually errors from JS redirects"""
+    # If there are query params, it's likely a failed redirect from proxied content
+    if request.query_params:
+        # Return a subtle script that prevents navigation issues
+        return Response(
+            content="""<html><head><script>
+                // This is a fallback page - the proxied site tried to navigate incorrectly
+                // Try to go back or reload
+                if (window.history.length > 1) {
+                    window.history.back();
+                }
+            </script></head><body></body></html>""",
+            media_type="text/html; charset=utf-8"
+        )
     return RedirectResponse(url="/")
 
 # --- System Endpoints ---
