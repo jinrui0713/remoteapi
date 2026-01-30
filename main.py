@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.0")
+app = FastAPI(title="yt-dlp API Server", version="8.5.1")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1849,7 +1849,10 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
 
         # Rewrite HTML if content type is html
         # Safely access headers
-        headers = getattr(resp, 'headers', {})
+        headers = getattr(resp, 'headers', None)
+        if headers is None: # Explicit check if headers attr is missing or None
+            headers = {} # Fallback
+            
         content_type = headers.get("content-type", "")
         
         if "text/html" in content_type:
