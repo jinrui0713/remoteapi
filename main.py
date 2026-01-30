@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.6.0")
+app = FastAPI(title="yt-dlp API Server", version="8.6.1")
 
 @app.on_event("startup")
 async def startup_event():
@@ -2003,15 +2003,46 @@ async def proxy_get_handler(request: Request):
     """Handle GET requests to /proxy gracefully - these are usually errors from JS redirects"""
     # If there are query params, it's likely a failed redirect from proxied content
     if request.query_params:
-        # Return a subtle script that prevents navigation issues
+        # Return a script that tries to handle navigation issues gracefully
         return Response(
-            content="""<html><head><script>
-                // This is a fallback page - the proxied site tried to navigate incorrectly
-                // Try to go back or reload
-                if (window.history.length > 1) {
-                    window.history.back();
-                }
-            </script></head><body></body></html>""",
+            content="""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Redirecting...</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               background: #0f0f23; color: #ccc; display: flex; justify-content: center;
+               align-items: center; min-height: 100vh; margin: 0; }
+        .box { text-align: center; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top: 3px solid #4361ee;
+                   border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    <script>
+        // The proxied site tried to navigate - handle gracefully
+        setTimeout(function() {
+            // Try to go back, or reload parent frame, or just close
+            if (window.history.length > 1) {
+                window.history.back();
+            } else if (window.parent && window.parent !== window) {
+                // In iframe - try to reload parent
+                try { window.parent.location.reload(); } catch(e) {}
+            } else {
+                // Nothing worked - just hide the spinner and show done
+                document.querySelector('.spinner').style.display = 'none';
+                document.querySelector('.box').innerHTML = '<p>Navigation completed</p><a href="/" style="color:#4361ee;">Go to Home</a>';
+            }
+        }, 500);
+    </script>
+</head>
+<body>
+    <div class="box">
+        <div class="spinner"></div>
+        <p>Processing...</p>
+    </div>
+</body>
+</html>""",
             media_type="text/html; charset=utf-8"
         )
     return RedirectResponse(url="/")

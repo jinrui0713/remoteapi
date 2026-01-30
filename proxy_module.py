@@ -628,8 +628,37 @@ class ProxyService:
             return XHRSend.call(this, body);
         }};
         
-        // Simple location override (imperfect but catches some cases)
-        // Note: Direct assignment to window.location.href is hard to trap 100% without proxy objects
+        // Override location.assign and location.replace
+        const originalAssign = window.location.assign.bind(window.location);
+        const originalReplace = window.location.replace.bind(window.location);
+        
+        window.location.assign = function(url) {{
+            const proxyUrl = shouldProxy(url);
+            if (proxyUrl) {{
+                proxyGo(proxyUrl);
+            }} else {{
+                originalAssign(url);
+            }}
+        }};
+        
+        window.location.replace = function(url) {{
+            const proxyUrl = shouldProxy(url);
+            if (proxyUrl) {{
+                proxyGo(proxyUrl);
+            }} else {{
+                originalReplace(url);
+            }}
+        }};
+        
+        // Try to intercept location.href changes via Object.defineProperty
+        // (May not work in all browsers due to security restrictions)
+        try {{
+            const locationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
+            if (locationDescriptor && locationDescriptor.configurable === false) {{
+                // Can't override location directly, but we can watch for navigation attempts
+                // by periodically checking if we're navigating away
+            }}
+        }} catch(e) {{}}
         
         """;
         if soup.head:
