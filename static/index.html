@@ -1935,18 +1935,10 @@
                     this.currentLyrics = '';
                     const targetUrl = res.url || res.webpage_url;
                     console.log("Streaming Target:", targetUrl);
-                    this.currentVideoUrl = '/api/stream?url=' + encodeURIComponent(targetUrl);
-                    const modal = this.getModal('videoModal');
-                    if (modal) {
-                        modal.show();
-                        this.$nextTick(() => {
-                            if (this.$refs.videoPlayer) {
-                                this.setupMediaSession(res.title, res.uploader, res.thumbnails);
-                                this.$refs.videoPlayer.load();
-                                this.$refs.videoPlayer.play().catch(e => console.log("Auto-play prevented:", e));
-                            }
-                        });
-                    }
+                    
+                    // Directly use the Proxy mechanism for "Stream" as requested
+                    this.proxyUrl = targetUrl;
+                    this.proxyGo();
                 },
                 // --- Log Management ---
                 async loadLogFiles() {

@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.4.10")
+app = FastAPI(title="yt-dlp API Server", version="8.5.0")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1805,7 +1805,11 @@ async def proxy_resource(payload: str, request: Request):
 @app.post("/proxy")
 async def proxy_handler(payload: str = Form(...), request: Request = None):
     try:
-        client_ip = request.client.host if request else "unknown"
+        # Validate Request
+        if request is None:
+             return Response(content="Proxy Internal Error: Request object missing.", status_code=500)
+
+        client_ip = request.client.host if request.client else "unknown"
         
         # Check Blocked IP
         if db_utils.is_ip_blocked(client_ip):
@@ -1816,15 +1820,22 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         username = None
         role = "guest"
         if token and token in sessions:
-            username = sessions[token].get('username')
-            role = sessions[token].get('role', 'user')
+            session = sessions[token]
+            if session: # Ensure session is not None
+                username = session.get('username')
+                role = session.get('role', 'user')
             
         if username:
             if not check_rate_limit(username, role, 'proxy'):
                 return Response(content="API Limit Exceeded: Proxy quota reached for this hour.", status_code=429)
             add_rate_limit_usage(username, 'proxy')
 
-        limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
+        # Safely get limits
+        role_limits = LIMITS.get(role)
+        limit_mb = 0
+        if role_limits:
+            limit_mb = role_limits.get('speed_limit', 0)
+        
         limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
 
         data = proxy_service.decrypt_payload(payload)
@@ -1833,8 +1844,14 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         # Execute Proxy Request
         resp = await proxy_service.proxy_request(url, client_ip)
         
+        if not resp:
+             raise ValueError("Proxy request returned no response")
+
         # Rewrite HTML if content type is html
-        content_type = resp.headers.get("content-type", "")
+        # Safely access headers
+        headers = getattr(resp, 'headers', {})
+        content_type = headers.get("content-type", "")
+        
         if "text/html" in content_type:
             content = await resp.aread()
             # Log bandwidth for non-streamed content
@@ -1847,13 +1864,14 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
             return StreamingResponse(
                 proxy_service.stream_response(resp, client_ip, limit_bps),
                 media_type=content_type,
-                headers={"Content-Disposition": resp.headers.get("Content-Disposition", "")}
+                headers={"Content-Disposition": headers.get("Content-Disposition", "")}
             )
 
     except HTTPException as he:
         return Response(content=f"Proxy Error: {he.detail}", status_code=he.status_code, media_type="text/plain; charset=utf-8")
     except Exception as e:
-        logging.error(f"Proxy failed: {e}", exc_info=True)
+        import traceback
+        logging.error(f"Proxy failed: {e}\n{traceback.format_exc()}")
         return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500, media_type="text/plain; charset=utf-8")
 
 @app.get("/proxy")
