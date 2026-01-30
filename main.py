@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.2")
+app = FastAPI(title="yt-dlp API Server", version="8.5.3")
 
 @app.on_event("startup")
 async def startup_event():
@@ -283,8 +283,8 @@ def check_auth(request: Request):
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
-    # Extremely permissive CSP to allow proxied content and external scripts
-    response.headers["Content-Security-Policy"] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+    # Extremely permissive CSP to allow proxied content and external scripts including extensions
+    response.headers["Content-Security-Policy"] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; connect-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; img-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; frame-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; style-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:;"
     # Remove Permissions-Policy to avoid "Unrecognized feature" errors and blocking legitimate features
     if "Permissions-Policy" in response.headers:
         del response.headers["Permissions-Policy"]
@@ -1809,7 +1809,7 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         if request is None:
              return Response(content="Proxy Internal Error: Request object missing.", status_code=500)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = getattr(request.client, 'host', "unknown") if request.client else "unknown"
         
         # Check Blocked IP
         if db_utils.is_ip_blocked(client_ip):
@@ -1832,7 +1832,7 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
             add_rate_limit_usage(username, 'proxy')
 
         # Safely get limits
-        role_limits = LIMITS.get(role)
+        role_limits = LIMITS.get(role, {})
         limit_mb = 0
         if role_limits:
             limit_mb = role_limits.get('speed_limit', 0)
@@ -1840,7 +1840,9 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
 
         data = proxy_service.decrypt_payload(payload)
-        url = data['url']
+        url = data.get('url')
+        if not url:
+             raise ValueError("No URL in payload")
         
         # Execute Proxy Request
         resp = await proxy_service.proxy_request(url, client_ip)
@@ -1850,10 +1852,7 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
 
         # Rewrite HTML if content type is html
         # Safely access headers
-        headers = getattr(resp, 'headers', None)
-        if headers is None: # Explicit check if headers attr is missing or None
-            headers = {} # Fallback
-            
+        headers = getattr(resp, 'headers', {}) or {}
         content_type = headers.get("content-type", "")
         
         if "text/html" in content_type:
@@ -1875,7 +1874,8 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
         return Response(content=f"Proxy Error: {he.detail}", status_code=he.status_code, media_type="text/plain; charset=utf-8")
     except Exception as e:
         import traceback
-        logging.error(f"Proxy failed: {e}\n{traceback.format_exc()}")
+        error_details = traceback.format_exc()
+        logging.error(f"Proxy failed: {e}\n{error_details}")
         return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500, media_type="text/plain; charset=utf-8")
 
 @app.get("/proxy")
