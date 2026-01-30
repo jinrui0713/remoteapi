@@ -38,6 +38,7 @@ class ProxyService:
         self.client = httpx.AsyncClient(
             verify=False, 
             follow_redirects=True,
+            timeout=httpx.Timeout(30.0, connect=10.0),  # 30 sec total, 10 sec connect
             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         )
         # Track client bandwidth usage: IP -> {window_start: float, bytes: int, throttled_until: float}
@@ -138,6 +139,15 @@ class ProxyService:
             req = self.client.build_request("GET", url)
             r = await self.client.send(req, stream=True)
             return r
+        except httpx.TimeoutException as te:
+            logging.warning(f"Proxy timeout for {url}: {te}")
+            raise HTTPException(status_code=504, detail=f"Connection timeout: The site took too long to respond")
+        except httpx.ConnectError as ce:
+            logging.warning(f"Proxy connection error for {url}: {ce}")
+            raise HTTPException(status_code=502, detail=f"Connection failed: Could not connect to the site")
+        except httpx.TooManyRedirects as re:
+            logging.warning(f"Proxy too many redirects for {url}: {re}")
+            raise HTTPException(status_code=502, detail=f"Too many redirects")
         except Exception as e:
             logging.error(f"Proxy request failed: {e}")
             # Always recreate the client on error to ensure fresh state
@@ -149,9 +159,10 @@ class ProxyService:
             self.client = httpx.AsyncClient(
                 verify=False, 
                 follow_redirects=True,
+                timeout=httpx.Timeout(30.0, connect=10.0),
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
             )
-            raise HTTPException(status_code=502, detail=f"Proxy error: {e}")
+            raise HTTPException(status_code=502, detail=f"Proxy error: {str(e)}")
 
     def rewrite_html(self, html_content: bytes, base_url: str) -> str:
         soup = BeautifulSoup(html_content, 'html.parser')

@@ -83,7 +83,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.5.5")
+app = FastAPI(title="yt-dlp API Server", version="8.5.6")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1892,12 +1892,82 @@ async def proxy_handler(payload: str = Form(...), request: Request = None):
             )
 
     except HTTPException as he:
-        return Response(content=f"Proxy Error: {he.detail}", status_code=he.status_code, media_type="text/plain; charset=utf-8")
+        # Return a friendly HTML error page instead of plain text
+        error_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Proxy Error</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+               background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+               color: #fff; display: flex; justify-content: center; align-items: center; 
+               min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
+        .error-box {{ background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); 
+                     border-radius: 16px; padding: 40px; max-width: 500px; text-align: center;
+                     box-shadow: 0 8px 32px rgba(0,0,0,0.3); }}
+        h1 {{ color: #ff6b6b; margin-bottom: 20px; }}
+        p {{ color: #ddd; line-height: 1.6; margin-bottom: 25px; }}
+        .status {{ font-size: 48px; font-weight: bold; color: #ff6b6b; margin-bottom: 10px; }}
+        .btn {{ background: #4361ee; color: #fff; padding: 12px 30px; border-radius: 8px; 
+               text-decoration: none; display: inline-block; margin: 5px; transition: all 0.3s; }}
+        .btn:hover {{ background: #3a56d4; transform: translateY(-2px); }}
+        .btn-secondary {{ background: rgba(255,255,255,0.2); }}
+        code {{ background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }}
+    </style>
+</head>
+<body>
+    <div class="error-box">
+        <div class="status">{he.status_code}</div>
+        <h1>Proxy Error</h1>
+        <p>{he.detail}</p>
+        <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
+        <a href="javascript:location.reload()" class="btn">Try Again</a>
+    </div>
+</body>
+</html>"""
+        return Response(content=error_html, status_code=he.status_code, media_type="text/html; charset=utf-8")
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
         logging.error(f"Proxy failed: {e}\n{error_details}")
-        return Response(content=f"Proxy Internal Error: {str(e)}", status_code=500, media_type="text/plain; charset=utf-8")
+        # Return a friendly HTML error page
+        error_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Proxy Error</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+               background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+               color: #fff; display: flex; justify-content: center; align-items: center; 
+               min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
+        .error-box {{ background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); 
+                     border-radius: 16px; padding: 40px; max-width: 500px; text-align: center;
+                     box-shadow: 0 8px 32px rgba(0,0,0,0.3); }}
+        h1 {{ color: #ff6b6b; margin-bottom: 20px; }}
+        p {{ color: #ddd; line-height: 1.6; margin-bottom: 25px; }}
+        .status {{ font-size: 48px; font-weight: bold; color: #ff6b6b; margin-bottom: 10px; }}
+        .btn {{ background: #4361ee; color: #fff; padding: 12px 30px; border-radius: 8px; 
+               text-decoration: none; display: inline-block; margin: 5px; transition: all 0.3s; }}
+        .btn:hover {{ background: #3a56d4; transform: translateY(-2px); }}
+        .btn-secondary {{ background: rgba(255,255,255,0.2); }}
+        .details {{ background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; 
+                   margin-top: 20px; text-align: left; font-size: 0.85em; word-break: break-all; }}
+    </style>
+</head>
+<body>
+    <div class="error-box">
+        <div class="status">500</div>
+        <h1>Proxy Internal Error</h1>
+        <p>An unexpected error occurred while processing your request.</p>
+        <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
+        <a href="javascript:location.reload()" class="btn">Try Again</a>
+        <div class="details"><strong>Error:</strong> {str(e)}</div>
+    </div>
+</body>
+</html>"""
+        return Response(content=error_html, status_code=500, media_type="text/html; charset=utf-8")
 
 @app.get("/proxy")
 async def proxy_get_handler():
