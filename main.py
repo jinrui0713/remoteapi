@@ -321,6 +321,12 @@ async def security_headers_middleware(request: Request, call_next):
 @app.middleware("http")
 async def auth_and_limit_middleware(request: Request, call_next):
     try:
+        response = await call_next(request)
+        
+        # Strip Permissions-Policy header to avoid browser warnings
+        if "permissions-policy" in response.headers:
+             del response.headers["permissions-policy"]
+             
         # Allow static resources, login endpoints, and favicon
         if request.url.path.startswith("/static") or \
            request.url.path == "/favicon.ico" or \
@@ -2840,8 +2846,14 @@ async def import_quiz_questions(file: UploadFile = File(...)):
 @app.websocket("/ws/quiz/{room_id}")
 async def quiz_websocket(websocket: WebSocket, room_id: str):
     """クイズルームのWebSocket接続"""
-    await websocket.accept()
-    
+    logger = logging.getLogger("uvicorn.error")
+    try:
+        await websocket.accept()
+        logger.info(f"WebSocket accepted for room: {room_id}")
+    except Exception as e:
+        logger.error(f"WebSocket accept failed: {e}")
+        return
+
     player: Optional[QuizPlayer] = None
     room: Optional[QuizRoom] = None
     
@@ -3058,7 +3070,8 @@ if __name__ == "__main__":
 
     try:
         # log_config=None prevents uvicorn from using its default config which fails without a console
-        uvicorn.run(app, host="0.0.0.0", port=args.port, log_config=None)
+        # forwarded_allow_ips="*" trusts headers from Cloudflare Tunnel/Proxie
+        uvicorn.run(app, host="0.0.0.0", port=args.port, log_config=None, forwarded_allow_ips="*")
     except Exception as e:
         logging.critical(f"Failed to start uvicorn: {e}")
         print(f"CRITICAL ERROR: Failed to start uvicorn: {e}")
