@@ -85,7 +85,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.7.1")
+app = FastAPI(title="yt-dlp API Server", version="8.7.3")
 
 @app.on_event("startup")
 async def startup_event():
@@ -2721,10 +2721,21 @@ matchmaking_queue: List[QuizPlayer] = []
 async def get_quiz_rooms():
     """公開ルーム一覧を取得"""
     rooms = []
-    for room_id, room in quiz_rooms.items():
+    current_time = time.time()
+    for room_id, room in list(quiz_rooms.items()):
+        # Clean up empty old rooms (older than 10 mins)
+        if not room.players and current_time - room.created_at > 600:
+            del quiz_rooms[room_id]
+            continue
+
         if room.state == "waiting":
+            host_name = "Unknown"
+            if room.host_id in room.players:
+                host_name = room.players[room.host_id].name
+                
             rooms.append({
                 "id": room_id,
+                "hostName": host_name,
                 "playerCount": len(room.players),
                 "isRanked": room.is_ranked,
                 "createdAt": room.created_at

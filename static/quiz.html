@@ -6,15 +6,23 @@
     <title>早押しクイズ</title>
     <style>
         :root {
-            --primary: #4361ee;
-            --primary-dark: #3a56d4;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --bg-dark: #0f0f23;
-            --bg-card: rgba(255,255,255,0.05);
+            /* Monotone & Accent Theme */
+            --bg-dark: #121212;
+            --bg-card: #1e1e1e;
+            --bg-hover: #2c2c2c;
+            
+            --primary: #3ea6ff; /* YouTube Blue */
+            --primary-dark: #2689e6;
+            --accent: #3ea6ff;
+            
+            --success: #2ba640;
+            --danger: #cc0000;
+            --warning: #ffcc00;
+            
             --text: #ffffff;
-            --text-muted: #9ca3af;
+            --text-muted: #aaaaaa;
+            
+            --border: 1px solid rgba(255,255,255,0.1);
         }
         
         * {
@@ -25,8 +33,8 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark) 0%, #1a1a3e 100%);
+            font-family: Roboto, Arial, sans-serif;
+            background-color: var(--bg-dark);
             color: var(--text);
             min-height: 100vh;
             overflow-x: hidden;
@@ -36,7 +44,9 @@
         .screen {
             display: none;
             min-height: 100vh;
-            padding: 20px;
+            padding: 24px;
+            max-width: 600px;
+            margin: 0 auto;
         }
         .screen.active {
             display: flex;
@@ -47,97 +57,171 @@
         #home-screen {
             justify-content: center;
             align-items: center;
-            gap: 30px;
+            gap: 24px;
         }
         
         .logo {
-            font-size: 2.5rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, #4361ee, #7c3aed);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text);
             text-align: center;
+            letter-spacing: -0.5px;
         }
         
         .logo-sub {
             color: var(--text-muted);
             font-size: 0.9rem;
-            margin-top: -10px;
+            margin-top: -12px;
+            font-weight: 400;
         }
         
         .menu-buttons {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
             width: 100%;
-            max-width: 300px;
+            max-width: 320px;
         }
         
         .menu-btn {
-            padding: 18px 30px;
-            font-size: 1.1rem;
-            font-weight: 600;
+            padding: 14px 24px;
+            font-size: 1rem;
+            font-weight: 500;
             border: none;
-            border-radius: 16px;
+            border-radius: 2px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: background 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
+            text-transform: uppercase;
         }
         
         .menu-btn.primary {
-            background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(67, 97, 238, 0.4);
+            background-color: var(--primary);
+            color: #121212;
+            font-weight: 700;
+        }
+        
+        .menu-btn.primary:hover {
+            background-color: var(--primary-dark);
         }
         
         .menu-btn.secondary {
-            background: var(--bg-card);
+            background-color: var(--bg-card);
             color: var(--text);
-            border: 1px solid rgba(255,255,255,0.1);
+            border: var(--border);
         }
         
-        .menu-btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .menu-btn:active {
-            transform: scale(0.98);
+        .menu-btn.secondary:hover {
+            background-color: var(--bg-hover);
         }
         
         .player-info {
             background: var(--bg-card);
-            border-radius: 16px;
-            padding: 20px;
+            border-radius: 2px;
+            padding: 24px;
             width: 100%;
-            max-width: 300px;
+            max-width: 320px;
             text-align: center;
+            border: var(--border);
         }
         
         .player-name-input {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             font-size: 1rem;
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 8px;
-            background: rgba(0,0,0,0.3);
-            color: white;
+            border: none;
+            border-bottom: 2px solid var(--text-muted);
+            background: transparent;
+            color: var(--text);
             text-align: center;
-            margin-top: 10px;
+            margin-top: 8px;
+            transition: border-color 0.2s;
+        }
+        
+        .player-name-input:focus {
+            outline: none;
+            border-bottom-color: var(--primary);
         }
         
         .rating-display {
-            margin-top: 15px;
-            font-size: 0.9rem;
+            margin-top: 16px;
+            font-size: 0.85rem;
             color: var(--text-muted);
         }
         
         .rating-value {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: bold;
-            color: var(--warning);
+            color: var(--text);
+            margin-left: 4px;
+        }
+
+        /* ===== ルーム一覧画面 ===== */
+        #room-list-screen {
+            padding-top: 40px;
+        }
+        
+        .room-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .refresh-btn {
+            background: transparent;
+            border: 1px solid var(--text-muted);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+        
+        .room-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        .room-item {
+            background: var(--bg-card);
+            padding: 16px;
+            border-radius: 2px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: var(--border);
+        }
+        
+        .room-info-top {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .room-info-sub {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+        
+        .join-btn {
+            background-color: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 8px 16px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .join-btn:hover {
+            background-color: rgba(62, 166, 255, 0.1);
         }
         
         /* ===== ロビー画面 ===== */
@@ -669,19 +753,31 @@
         </div>
         
         <div class="menu-buttons">
-            <button class="menu-btn primary" onclick="startMatchmaking()">
-                🎮 ランクマッチ
+            <button class="menu-btn primary" onclick="createRoom()">
+                部屋を作る
             </button>
-            <button class="menu-btn secondary" onclick="showRoomInput()">
-                👥 フレンドマッチ
+            <button class="menu-btn secondary" onclick="showRoomList()">
+                部屋に入る
             </button>
             <button class="menu-btn secondary" onclick="showScreen('create-screen')">
-                ✏️ 作問する
+                作問する
             </button>
         </div>
     </div>
+
+    <!-- ルーム一覧画面 -->
+    <div id="room-list-screen" class="screen">
+        <div class="room-list-header">
+             <button class="back-btn" onclick="showScreen('home-screen')">← 戻る</button>
+             <button class="refresh-btn" onclick="fetchRooms()">更新</button>
+        </div>
+        <h2 style="margin-bottom: 20px; font-weight:700;">部屋一覧</h2>
+        <div id="roomListContainer" class="room-list-container">
+            <div style="text-align:center; color:var(--text-muted); padding:20px;">読み込み中...</div>
+        </div>
+    </div>
     
-    <!-- マッチング中画面 -->
+    <!-- マッチング中画面 (非表示/予備) -->
     <div id="matchmaking-screen" class="screen">
         <button class="back-btn" onclick="cancelMatchmaking()">← キャンセル</button>
         <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
@@ -994,6 +1090,74 @@
             ws.send(JSON.stringify({ type: 'ready', ready: isReady }));
         }
         
+        // ===== New Methods for Room Management =====
+        function createRoom() {
+            playerName = document.getElementById('playerName').value || `GUEST_${Math.floor(Math.random()*1000)}`;
+            localStats.name = playerName;
+            saveLocalStats();
+            
+            // Random Room ID
+            currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            connectWebSocket(currentRoomId);
+        }
+
+        async function showRoomList() {
+            showScreen('room-list-screen');
+            await fetchRooms();
+        }
+
+        async function fetchRooms() {
+            const container = document.getElementById('roomListContainer');
+            container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">読み込み中...</div>';
+            
+            try {
+                const res = await fetch('/api/quiz/rooms');
+                const data = await res.json();
+                const rooms = data.rooms || [];
+                
+                if (rooms.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">参加可能な部屋がありません<br>「部屋を作る」から作成してください</div>';
+                    return;
+                }
+                
+                container.innerHTML = rooms.map(room => `
+                    <div class="room-item">
+                        <div>
+                            <div class="room-info-top">${escapeHtml(room.hostName)} の部屋</div>
+                            <div class="room-info-sub">参加者: ${room.playerCount}名</div>
+                        </div>
+                        <button class="join-btn" onclick="joinRoom('${room.id}')">入室</button>
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = '<div style="text-align:center;color:var(--danger);padding:20px;">エラーが発生しました</div>';
+            }
+        }
+
+        function joinRoom(id) {
+            playerName = document.getElementById('playerName').value || `GUEST_${Math.floor(Math.random()*1000)}`;
+            localStats.name = playerName;
+            saveLocalStats();
+            
+            currentRoomId = id;
+            connectWebSocket(id);
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+
         // ===== マッチング =====
         function startMatchmaking() {
             connectToRoom('matchmaking');
