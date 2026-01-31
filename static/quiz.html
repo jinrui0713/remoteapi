@@ -1098,7 +1098,7 @@
             
             // Random Room ID
             currentRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            connectWebSocket(currentRoomId);
+            connectToRoom(currentRoomId);
         }
 
         async function showRoomList() {
@@ -1142,7 +1142,7 @@
             saveLocalStats();
             
             currentRoomId = id;
-            connectWebSocket(id);
+            connectToRoom(id);
         }
         
         function escapeHtml(str) {

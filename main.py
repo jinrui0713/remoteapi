@@ -85,7 +85,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.7.3")
+app = FastAPI(title="yt-dlp API Server", version="8.7.4")
 
 @app.on_event("startup")
 async def startup_event():
@@ -2846,8 +2846,18 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
     room: Optional[QuizRoom] = None
     
     try:
-        # 初期接続メッセージを待つ
-        init_data = await websocket.receive_json()
+        # 初期接続メッセージを待つ (タイムアウト付き)
+        try:
+            init_data = await asyncio.wait_for(websocket.receive_json(), timeout=10.0)
+        except asyncio.TimeoutError:
+            logging.error("WebSocket init timeout")
+            await websocket.close(code=4000)
+            return
+        except Exception as e:
+            logging.error(f"WebSocket init error: {e}")
+            await websocket.close(code=4000)
+            return
+
         
         if init_data.get("type") != "join":
             await websocket.close(code=4000, reason="Invalid init message")
@@ -2865,43 +2875,55 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
             await player.send({"type": "matchmaking_start"})
             
             # マッチング待機
-            while len(matchmaking_queue) < 2:
-                await asyncio.sleep(0.5)
-                # 接続確認
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except:
-                    matchmaking_queue.remove(player)
-                    return
-            
-            # 2人揃ったらルーム作成
-            if player in matchmaking_queue:
-                if matchmaking_queue[0] == player:
-                    # 最初のプレイヤーがホストとしてルーム作成
-                    new_room_id = secrets.token_urlsafe(6)
-                    room = QuizRoom(new_room_id, player_id, is_ranked=True)
-                    quiz_rooms[new_room_id] = room
-                    
-                    # 2人目を取得
-                    p2 = matchmaking_queue[1]
-                    matchmaking_queue.clear()
-                    
-                    # 両方をルームに追加
-                    room.players[player_id] = player
-                    room.players[p2.player_id] = p2
-                    
-                    await player.send({"type": "matched", "roomId": new_room_id})
-                    await p2.send({"type": "matched", "roomId": new_room_id})
-                    
-                    # ロビー情報を送信
-                    await room.broadcast({
-                        "type": "lobby_update",
-                        "players": room.get_player_list()
-                    })
-                else:
-                    # 2人目はホストのルームに参加するのを待つ
+            try:
+                while len(matchmaking_queue) < 2:
                     await asyncio.sleep(0.5)
-                    return
+                    # 接続確認
+                    try:
+                        await websocket.send_json({"type": "ping"})
+                    except:
+                        if player in matchmaking_queue:
+                            matchmaking_queue.remove(player)
+                        return
+                    
+                    # 既にマッチング済みの場合は抜ける
+                    if player not in matchmaking_queue:
+                        return
+                
+                # 2人揃ったらルーム作成
+                if player in matchmaking_queue:
+                    if matchmaking_queue[0] == player:
+                        # 最初のプレイヤーがホストとしてルーム作成
+                        new_room_id = secrets.token_urlsafe(6)
+                        room = QuizRoom(new_room_id, player_id, is_ranked=True)
+                        quiz_rooms[new_room_id] = room
+                        
+                        # 2人目を取得
+                        p2 = matchmaking_queue[1]
+                        matchmaking_queue.clear() # キューをクリア
+                        
+                        # 両方をルームに追加
+                        room.players[player_id] = player
+                        room.players[p2.player_id] = p2
+                        
+                        await player.send({"type": "matched", "roomId": new_room_id})
+                        await p2.send({"type": "matched", "roomId": new_room_id})
+                        
+                        # ロビー情報を送信
+                        await room.broadcast({
+                            "type": "lobby_update",
+                            "players": room.get_player_list()
+                        })
+                    else:
+                        # 2人目はホストの処理を待つ
+                        # hostがmatchmaking_queue.clear()した時点でループ終了すべきだが念のため
+                        return
+            except Exception as match_err:
+                logging.error(f"Matchmaking error: {match_err}")
+                if player in matchmaking_queue:
+                    matchmaking_queue.remove(player)
+                return
+
         else:
             # 通常のルーム参加
             room = quiz_rooms.get(room_id)
@@ -2913,6 +2935,7 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
             player = QuizPlayer(websocket, player_id, player_name)
             room.players[player_id] = player
             
+            # 参加成功メッセージ
             await player.send({
                 "type": "joined",
                 "roomId": room_id,
@@ -2927,7 +2950,14 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
         
         # メッセージループ
         while True:
-            data = await websocket.receive_json()
+            try:
+                data = await websocket.receive_json()
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logging.error(f"WebSocket receive loop error: {e}")
+                break
+
             msg_type = data.get("type")
             
             if msg_type == "ping":
@@ -2949,7 +2979,7 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
                 })
                 
                 # 全員準備完了ならゲーム開始
-                if room.all_ready():
+                if room and room.all_ready():
                     await room.start_game()
                     
             elif msg_type == "buzz":
@@ -2974,11 +3004,12 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logging.error(f"Quiz WebSocket error: {e}")
+        logging.error(f"Quiz WebSocket error: {e}", exc_info=True)
     finally:
         # クリーンアップ
-        if player and player in matchmaking_queue:
+        if player and room_id == "matchmaking" and player in matchmaking_queue:
             matchmaking_queue.remove(player)
+
         if room and player:
             room.players.pop(player.player_id, None)
             if len(room.players) == 0:
