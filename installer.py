@@ -125,6 +125,8 @@ class InstallerApp(tk.Tk):
         # 0. Stop Existing Process
         try:
             subprocess.run(["taskkill", "/F", "/IM", "YtDlpApiServer.exe"], capture_output=True)
+            # Node.js proxy might be left undefined if parent killed forcefully
+            subprocess.run(["taskkill", "/F", "/IM", "node.exe"], capture_output=True) 
             time.sleep(1) # Wait for release
         except:
             pass

@@ -135,7 +135,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.8.6")
+app = FastAPI(title="yt-dlp API Server", version="8.8.7")
 
 @app.on_event("startup")
 async def startup_event():
@@ -144,6 +144,26 @@ async def startup_event():
     
     # Start Node.js Proxy
     start_node_proxy()
+
+@app.get("/api/internal/check_session")
+async def check_session_internal(token: str, request: Request):
+    """Internal endpoint for Node.js proxy to validate sessions"""
+    if request.client.host not in ["127.0.0.1", "::1", "localhost"]:
+        raise HTTPException(status_code=403, content="Localhost only")
+    
+    # sessions is defined below, but we can access it if global. 
+    # Python resolves globals at runtime. 
+    # However, 'sessions' variable is defined later in the file.
+    # I should check if I can access it.
+    # It is defined at top-level scope but initialized later in the file?
+    # No, I saw it initialized: sessions: Dict[str, Dict] = {} around line 170.
+    # So it is available.
+    
+    session = sessions.get(token)
+    if session and session['exp'] > time.time():
+        return {"role": session['role'], "username": session['username']}
+    return JSONResponse(status_code=404, content={"error": "Session not found or expired"})
+
 
 
 # --- Middleware for Bandwidth & Fingerprinting ---
