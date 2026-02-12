@@ -135,7 +135,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.8.1")
+app = FastAPI(title="yt-dlp API Server", version="8.8.2")
 
 @app.on_event("startup")
 async def startup_event():
@@ -478,10 +478,71 @@ def cleanup_old_files():
     except Exception as e:
         logging.error(f"Cleanup failed: {e}")
 
+node_process = None
+
 @app.on_event("startup")
 async def startup_event():
+    global node_process
     # Run cleanup on startup
     executor.submit(cleanup_old_files)
+    
+    try:
+        logging.info("Attempting to start Node.js proxy...")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 1. Locate server.js
+        server_js_paths = [
+            os.path.join(base_dir, "src", "node-proxy", "server.js"),
+            os.path.join(base_dir, "_internal", "src", "node-proxy", "server.js"), 
+            os.path.join(base_dir, "..", "src", "node-proxy", "server.js")
+        ]
+        server_js = next((p for p in server_js_paths if os.path.exists(p)), None)
+        
+        if not server_js:
+            logging.warning("Node proxy server.js not found. Proxy functionality unavailable.")
+        else:
+            # 2. Locate node.exe
+            node_exe_paths = [
+                os.path.join(base_dir, "src", "node-proxy", "node_bin", "node-v20.11.0-win-x64", "node.exe"),
+                os.path.join(base_dir, "_internal", "src", "node-proxy", "node_bin", "node-v20.11.0-win-x64", "node.exe"),
+                 "node" # System fallback
+            ]
+            node_exe = "node"
+            for p in node_exe_paths:
+                if p != "node" and os.path.exists(p):
+                    node_exe = p
+                    break
+            
+            logging.info(f"Using node: {node_exe} for {server_js}")
+
+            # 3. Start Process
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            node_process = subprocess.Popen(
+                [node_exe, server_js],
+                cwd=os.path.dirname(server_js),
+                stdout=sys.stdout, 
+                stderr=sys.stderr,
+                startupinfo=startupinfo
+            )
+            logging.info(f"Node proxy started with PID {node_process.pid}")
+            
+    except Exception as e:
+        logging.error(f"Failed to start Node proxy: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global node_process
+    if node_process:
+        logging.info("Terminating Node proxy...")
+        node_process.terminate()
+        try:
+             node_process.wait(timeout=3)
+        except:
+             node_process.kill()
 
 class JobStatus:
     QUEUED = "queued"
