@@ -122,18 +122,52 @@ class InstallerApp(tk.Tk):
         target_dir = self.install_dir.get()
         port = self.port.get()
         
-        # 0. Stop Existing Process
-        try:
-            subprocess.run(["taskkill", "/F", "/IM", "YtDlpApiServer.exe"], capture_output=True)
-            # Node.js proxy might be left undefined if parent killed forcefully
-            subprocess.run(["taskkill", "/F", "/IM", "node.exe"], capture_output=True) 
-            time.sleep(1) # Wait for release
-        except:
-            pass
+        # 0. Stop Existing Process with Retries
+        print("Stopping existing processes...")
+        for i in range(5):
+            try:
+                subprocess.run(["taskkill", "/F", "/IM", "YtDlpApiServer.exe"], capture_output=True)
+                subprocess.run(["taskkill", "/F", "/IM", "node.exe"], capture_output=True)
+                time.sleep(1)
+            except:
+                pass
 
         # 1. Create Directory
         if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
+            os.makedirs(target_dir, exist_ok=True)
+            
+        # Helper for Robust Copy
+        def robust_copytree(src, dst):
+            if os.path.exists(dst):
+                # Try simple remove
+                try: 
+                    shutil.rmtree(dst) 
+                except Exception as e:
+                    # If that fails, try to move it out of the way (Atomic rename is often allowed when delete isn't)
+                    try:
+                        temp_trash = dst + f".trash-{time.time()}"
+                        os.rename(dst, temp_trash)
+                        # We can leave the trash or try to delete it later. 
+                        # To be clean, try to schedule delete on reboot? or just ignore.
+                        # Actually on Windows, rename of pure directory also fails if file inside is open?
+                        # No, usually you can rename the parent folder of a locked file.
+                        pass 
+                    except:
+                        # If rename fails, we really need to wait or fail
+                        print(f"Warning: Could not remove {dst}, attempting overwrite or merge...")
+                        # Proceeding might fail on individual files but let's try
+            
+            # Now copy
+            if not os.path.exists(dst):
+                shutil.copytree(src, dst)
+            else:
+                # Merge copy
+                # This is tricky with shutil.copytree as it expects dst not to exist
+                # We use distutils or manual walk
+                import distutils.dir_util
+                distutils.dir_util.copy_tree(src, dst)
+
+        # 2. Extract Files
             
         # 2. Extract Files
         # In PyInstaller, bundled files are in sys._MEIPASS
@@ -183,13 +217,9 @@ class InstallerApp(tk.Tk):
         src_node = os.path.join(base_path, 'src')
         dst_node = os.path.join(target_dir, 'src')
         if os.path.exists(src_node):
-            if os.path.exists(dst_node):
-                shutil.rmtree(dst_node)
-            shutil.copytree(src_node, dst_node)
+            robust_copytree(src_node, dst_node)
         elif os.path.exists('src'): # Source mode
-             if os.path.exists(dst_node):
-                shutil.rmtree(dst_node)
-             shutil.copytree('src', dst_node)
+             robust_copytree('src', dst_node)
 
         # 3. Register Scheduled Task
         exe_path = os.path.join(target_dir, "YtDlpApiServer.exe")
