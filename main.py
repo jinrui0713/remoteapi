@@ -135,7 +135,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.8.4")
+app = FastAPI(title="yt-dlp API Server", version="8.8.5")
 
 @app.on_event("startup")
 async def startup_event():
@@ -482,29 +482,38 @@ async def startup_event():
     
     try:
         logging.info("Attempting to start Node.js proxy...")
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Determine base directories to search
+        search_dirs = [
+            os.path.dirname(os.path.abspath(__file__)), # Script/PyInstaller internal
+            os.path.dirname(sys.executable), # Exe location
+            os.getcwd() # Working directory
+        ]
         
         # 1. Locate server.js
-        server_js_paths = [
-            os.path.join(base_dir, "src", "node-proxy", "server.js"),
-            os.path.join(base_dir, "_internal", "src", "node-proxy", "server.js"), 
-            os.path.join(base_dir, "..", "src", "node-proxy", "server.js")
-        ]
-        server_js = next((p for p in server_js_paths if os.path.exists(p)), None)
+        server_js = None
+        for base in search_dirs:
+            p = os.path.join(base, "src", "node-proxy", "server.js")
+            if os.path.exists(p):
+                server_js = p
+                logging.info(f"Found server.js at: {p}")
+                # Set base_dir to where we found it for consistent node searching
+                base_dir = base 
+                break
         
         if not server_js:
-            logging.warning("Node proxy server.js not found. Proxy functionality unavailable.")
+            logging.warning(f"Node proxy server.js not found in {search_dirs}. Proxy functionality unavailable.")
         else:
-            # 2. Locate node.exe
-            node_exe_paths = [
-                os.path.join(base_dir, "src", "node-proxy", "node_bin", "node-v20.11.0-win-x64", "node.exe"),
-                os.path.join(base_dir, "_internal", "src", "node-proxy", "node_bin", "node-v20.11.0-win-x64", "node.exe"),
-                 "node" # System fallback
-            ]
-            node_exe = "node"
-            for p in node_exe_paths:
-                if p != "node" and os.path.exists(p):
-                    node_exe = p
+            # 2. Locate node.exe (Relative to where we found src, or other bases)
+            node_exe = "node" # Fallback
+            
+            # Check for bundled node
+            found_node = False
+            for base in search_dirs:
+                node_p = os.path.join(base, "src", "node-proxy", "node_bin", "node-v20.11.0-win-x64", "node.exe")
+                if os.path.exists(node_p):
+                    node_exe = node_p
+                    found_node = True
                     break
             
             logging.info(f"Using node: {node_exe} for {server_js}")
