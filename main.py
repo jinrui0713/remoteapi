@@ -1926,6 +1926,10 @@ async def reverse_proxy_to_node(request: Request, path: str):
     """
     Reverse proxy to Node.js server.
     """
+    # Prevent proxying to favicon or static if they leak here
+    if path == "favicon.ico" or path.startswith("static/"):
+        return JSONResponse(content={"detail": "Not Found"}, status_code=404)
+
     # Build target URL
     # Prepend proxy/ because Node app expects /proxy/ prefix
     # Also handle cases where path contains encoded chars (like ? or #)
@@ -2977,6 +2981,12 @@ if not os.path.exists(static_path):
         static_path = "static"
     else:
         logging.error("Static directory not found!")
+else:
+    logging.info(f"Serving static files from: {static_path}")
+    try:
+        logging.info(f"Static directory contents: {os.listdir(static_path)}")
+    except Exception as e:
+        logging.error(f"Failed to list static directory: {e}")
 
 # Mount static files
 if os.path.exists(static_path):
@@ -2988,6 +2998,10 @@ else:
 
 if __name__ == "__main__":
     import argparse
+    import multiprocessing
+    
+    # Required for PyInstaller (Windows)
+    multiprocessing.freeze_support()
     
     parser = argparse.ArgumentParser(description='YtDlp API Server')
     parser.add_argument('--port', type=int, default=8000, help='Port to run the server on')
