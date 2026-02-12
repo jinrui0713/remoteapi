@@ -1,7 +1,7 @@
 const express = require('express');
 const Unblocker = require('unblocker');
 const { Transform } = require('stream');
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
 const http = require('http');
 
 const app = express();
@@ -79,12 +79,15 @@ const unblocker = new Unblocker({
     prefix: '/proxy/',
     requestMiddleware: [
         // YouTube workaround
-        (data) => {
+        async (data) => {
             if (ytdl.validateURL(data.url)) {
-                const res = data.clientResponse;
-                res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-
-                ytdl.getInfo(data.url).then((info) => {
+                
+                try {
+                    const info = await ytdl.getInfo(data.url);
+                    const res = data.clientResponse;
+                    
+                    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+                    
                     const formats = ytdl.filterFormats(info.formats, "audioandvideo");
                     const thumb = info.videoDetails.thumbnails.pop() || { url: '' };
 
@@ -117,16 +120,28 @@ ${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" sr
 </body>
 </html>
 `);
-                }).catch((err) => {
+                    return true; // Response sent
+                } catch (err) {
                     console.error(`Error getting info for ${data.url}`, err);
-                    res.end(`Error retrieving video info: ${err.message}`);
-                });
-                return true; // Sent response
+                    // Do not return true here, let unblocker try regular proxying? 
+                    // Or return error page. Regular proxying fails for youtube anyway.
+                    data.clientResponse.writeHead(500, { "content-type": "text/plain" });
+                    data.clientResponse.end(`Error retrieving video info: ${err.message}`);
+                    return true;
+                }
             }
         }
     ],
     responseMiddleware: [
         async (data) => {
+            // STRIP CSP HEADERS
+            if (data.headers) {
+                delete data.headers['content-security-policy'];
+                delete data.headers['content-security-policy-report-only'];
+                delete data.headers['x-webkit-csp'];
+                delete data.headers['x-content-security-policy'];
+            }
+
             // Bandwidth Throttling
             if (data.contentType && (
                 data.contentType.startsWith('video/') || 
@@ -143,7 +158,6 @@ ${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" sr
                         data.stream = data.stream.pipe(new ThrottleStream(THROTTLE_BPS));
                     }
                 } catch(e) {
-                     // Fallback to throttle on error
                      data.stream = data.stream.pipe(new ThrottleStream(THROTTLE_BPS));
                 }
             }
@@ -262,6 +276,8 @@ app.get('/', (req, res) => {
             loader.style.display = 'block';
             input.value = target;
             frame.src = '/proxy/' + target;
+            // Clean URL bar query to satisfy user constraint
+            window.history.replaceState(null, '', '/');
         }
 
         function handleKey(e) {
@@ -290,6 +306,7 @@ app.get('/', (req, res) => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('url')) {
             navigate(params.get('url'));
+            window.history.replaceState(null, '', '/');
         } else {
             navigate('https://www.google.com');
         }

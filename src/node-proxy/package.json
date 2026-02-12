@@ -4,8 +4,8 @@
   "description": "Node.js proxy with unblocker",
   "main": "server.js",
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "express": "^4.18.2",
-    "unblocker": "^2.1.1",
-    "ytdl-core": "^4.11.5"
+    "unblocker": "^2.1.1"
   }
 }
