@@ -5,6 +5,7 @@
   "main": "server.js",
   "dependencies": {
     "express": "^4.18.2",
-    "unblocker": "^2.1.1"
+    "unblocker": "^2.1.1",
+    "ytdl-core": "^4.11.5"
   }
 }

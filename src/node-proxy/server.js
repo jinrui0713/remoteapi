@@ -3,6 +3,7 @@ const express = require('express');
 const Unblocker = require('unblocker');
 const { Transform } = require('stream');
 const { StringDecoder } = require('string_decoder');
+const ytdl = require('ytdl-core');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -172,6 +173,55 @@ const INJECTED_JS = `
 
 const unblocker = new Unblocker({
     prefix: '/proxy/',
+    requestMiddleware: [
+        (data) => {
+            if (ytdl.validateURL(data.url)) {
+                const res = data.clientResponse;
+                res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+
+                ytdl.getInfo(data.url).then((info) => {
+                    const formats = ytdl.filterFormats(info.formats, "audioandvideo");
+                    const thumb = info.videoDetails.thumbnails.pop() || { url: '' };
+
+                    res.end(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${info.videoDetails.title}</title>
+<style>
+body { background: #000; color: #fff; margin:0; display:flex; flex-direction:column; align-items:center; min-height:100vh; font-family: sans-serif; }
+video { max-width: 100%; max-height: 80vh; background: #000; }
+.info { padding: 20px; max-width: 800px; width: 100%; }
+h1 { font-size: 1.2rem; margin-bottom: 10px; }
+p { font-size: 0.9rem; white-space: pre-wrap; color: #ccc; }
+.back { padding: 10px; width: 100%; background: #222; margin-bottom: 20px; }
+.back a { color: #fff; text-decoration: none; margin-left: 20px; }
+</style>
+${INJECTED_CSS}
+</head>
+<body>
+<div class="back"><a href="${MAIN_APP_URL}/static/index.html">← Back to App</a></div>
+<video controls poster="/proxy/${thumb.url}" autoplay style="width: 100%">
+${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" src="/proxy/${format.url.replace(/&/g, "&amp;")}">`).join("\n")}
+</video>
+<div class="info">
+<h1>${info.videoDetails.title}</h1>
+<p>${info.videoDetails.description ? info.videoDetails.description.replace(/[\n]/g, "\n<br>") : ''}</p>
+</div>
+${INJECTED_JS}
+</body>
+</html>
+`);
+                }).catch((err) => {
+                    console.error(`Error getting info for ${data.url}`, err);
+                    res.end(`Error retrieving video info: ${err.message}`);
+                });
+                return true; // Sent response
+            }
+        }
+    ],
     responseMiddleware: [
         (data) => {
             // Bandwidth Throttling
@@ -197,14 +247,24 @@ const unblocker = new Unblocker({
                             buffer = parts[1];
                         }
                         
+                        // INJECTED_JS definition needed if not defined globally in scope yet
+                        // Wait, INJECTED_CSS is defined but INJECTED_JS ?
+                        // Ah, INJECTED_JS is not defined in the original file I read!
+                        // I see INJECTED_CSS above. Let's assume INJECTED_JS was added or should be added.
+                        // Wait, I saw INJECTED_JS in my replacement code in previous step but didn't check for its definition.
+                        // Let's scroll up in the file to see INJECTED_CSS definition.
+                        
                         if (buffer.includes('</body>')) {
                             const parts = buffer.split('</body>');
                             this.push(parts[0] + INJECTED_JS + '</body>');
                             buffer = parts[1];
                         }
+
                         
                         if (buffer.length > 1024 * 64) { 
                              const keep = 20; 
+                             // Ensure we don't slice in the middle of a multi-byte character if possible, 
+                             // but buffer here is a string (decoder.write), so it's safe.
                              const flush = buffer.slice(0, buffer.length - keep);
                              buffer = buffer.slice(buffer.length - keep);
                              this.push(flush);
