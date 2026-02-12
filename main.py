@@ -1,6 +1,8 @@
 import os
 import sys
 import logging
+import subprocess
+import atexit
 from logging.handlers import RotatingFileHandler
 
 # Configure logging with rotation (1MB per file, max 5 backups)
@@ -57,6 +59,54 @@ except Exception as e:
     print(f"CRITICAL ERROR: Failed to import dependencies: {e}")
     sys.exit(1)
 
+# --- Node.js Proxy Management ---
+NODE_PROCESS = None
+
+def start_node_proxy():
+    global NODE_PROCESS
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        proxy_dir = os.path.join(base_dir, "src", "node-proxy")
+        node_bin_dir = os.path.join(proxy_dir, "node_bin")
+        # Find node executable
+        node_exe_path = os.path.join(node_bin_dir, "node-v20.11.0-win-x64", "node.exe")
+        server_js = os.path.join(proxy_dir, "server.js")
+        
+        # Run setup if missing
+        if not os.path.exists(node_exe_path) or not os.path.exists(server_js):
+            logging.warning("Node.js proxy files missing. Running setup...")
+            setup_script = os.path.join(base_dir, "setup_node_env.py")
+            if os.path.exists(setup_script):
+                subprocess.run([sys.executable, setup_script], check=True)
+            else:
+                logging.error("setup_node_env.py not found!")
+                return
+            
+        logging.info(f"Starting Node.js Proxy: {server_js}")
+        
+        env = os.environ.copy()
+        env["PORT"] = "8080"
+        env["MAIN_APP_URL"] = "http://localhost:8000" # Update if port is dynamic
+        
+        NODE_PROCESS = subprocess.Popen(
+            [node_exe_path, server_js],
+            cwd=proxy_dir,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        logging.info("Node.js Proxy process started.")
+        
+    except Exception as e:
+        logging.error(f"Failed to start Node.js Proxy: {e}")
+
+@atexit.register
+def cleanup_node():
+    if NODE_PROCESS:
+        logging.info("Terminating Node.js Proxy...")
+        NODE_PROCESS.terminate()
+
+
 
 # --- Real-time Log Streaming Setup ---
 log_queues: List[asyncio.Queue] = []
@@ -91,6 +141,9 @@ app = FastAPI(title="yt-dlp API Server", version="8.7.4")
 async def startup_event():
     global LOG_LOOP
     LOG_LOOP = asyncio.get_running_loop()
+    
+    # Start Node.js Proxy
+    start_node_proxy()
 
 
 # --- Middleware for Bandwidth & Fingerprinting ---
@@ -1798,266 +1851,53 @@ async def unblock_ip_endpoint(req: BlockIPRequest, request: Request):
     db_utils.log_event(request.client.host, "UNBLOCK_IP", f"Unblocked {req.ip}")
     return {"message": f"Unblocked {req.ip}"}
 
-# --- Proxy Endpoints ---
+# --- Proxy Endpoints (Node.js Reverse Proxy) ---
 
-class ProxyEncryptRequest(BaseModel):
-    url: str
+NODE_PROXY_URL = "http://localhost:8080"
 
-@app.post("/api/proxy/encrypt")
-async def proxy_encrypt(req: ProxyEncryptRequest):
-    payload = proxy_service.encrypt_payload(req.url)
-    return {"payload": payload}
-
-@app.get("/api/proxy/resource")
-async def proxy_resource(payload: str, request: Request):
-    """GET endpoint for proxied resources (images, scripts, css)"""
+@app.api_route("/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+async def reverse_proxy_to_node(request: Request, path: str):
+    """
+    Reverse proxy to Node.js server.
+    """
+    # Build target URL
+    url = httpx.URL(path=path, query=request.url.query.encode("utf-8"))
+    client = httpx.AsyncClient(base_url=NODE_PROXY_URL)
+    
+    # Read body
+    body = await request.body()
+    
     try:
-        client_ip = request.client.host
-        if db_utils.is_ip_blocked(client_ip):
-             return Response(content="Access Denied", status_code=403)
-
-        # Determine Speed Limit
-        token = request.cookies.get(AUTH_COOKIE_NAME)
-        role = "guest"
-        if token and token in sessions:
-            role = sessions[token].get('role', 'user')
-            
-        limit_mb = LIMITS.get(role, {}).get('speed_limit', 0)
-        limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
-
-        data = proxy_service.decrypt_payload(payload)
-        url = data['url']
+        rp_req = client.build_request(
+            request.method,
+            url,
+            headers=request.headers.raw,
+            content=body
+        )
         
-        resp = await proxy_service.proxy_request(url, client_ip)
+        rp_resp = await client.send(rp_req, stream=True)
         
-        # Filter security headers
-        resp_headers = getattr(resp, 'headers', {}) or {}
-        skip_headers = {
-            'content-security-policy', 'content-security-policy-report-only',
-            'x-content-security-policy', 'x-webkit-csp', 'x-frame-options',
-            'x-xss-protection', 'permissions-policy', 'cross-origin-embedder-policy',
-            'cross-origin-opener-policy', 'cross-origin-resource-policy'
-        }
-        clean_headers = {"Content-Disposition": resp_headers.get("Content-Disposition", "")}
-        
-        # Stream response
         return StreamingResponse(
-            proxy_service.stream_response(resp, client_ip, limit_bps),
-            media_type=resp_headers.get("content-type", "application/octet-stream"),
-            headers=clean_headers
+            rp_resp.aiter_raw(),
+            status_code=rp_resp.status_code,
+            headers=rp_resp.headers,
+            background=BackgroundTasks([client.aclose])
         )
     except Exception as e:
-        return Response(status_code=404)
+        await client.aclose()
+        return Response(content=f"Proxy Error: {e}", status_code=502)
 
-@app.post("/proxy")
-async def proxy_handler(payload: str = Form(...), request: Request = None):
-    try:
-        # Validate Request
-        if request is None:
-             return Response(content="Proxy Internal Error: Request object missing.", status_code=500)
+# (Deprecated old Python proxy endpoints removed)
 
-        client_ip = getattr(request.client, 'host', "unknown") if request.client else "unknown"
-        
-        # Check Blocked IP
-        if db_utils.is_ip_blocked(client_ip):
-             return Response(content="Access Denied: Your IP is blocked.", status_code=403)
 
-        # Rate Limit Check
-        cookies = getattr(request, 'cookies', {}) or {}
-        token = cookies.get(AUTH_COOKIE_NAME)
-        username = None
-        role = "guest"
-        if token and token in sessions:
-            session = sessions[token]
-            if session: # Ensure session is not None
-                username = session.get('username')
-                role = session.get('role', 'user')
-            
-        if username:
-            if not check_rate_limit(username, role, 'proxy'):
-                return Response(content="API Limit Exceeded: Proxy quota reached for this hour.", status_code=429)
-            add_rate_limit_usage(username, 'proxy')
 
-        # Safely get limits
-        role_limits = LIMITS.get(role, {})
-        limit_mb = 0
-        if role_limits:
-            limit_mb = role_limits.get('speed_limit', 0)
-        
-        limit_bps = int(limit_mb * 1024 * 1024) if limit_mb > 0 else None
 
-        data = proxy_service.decrypt_payload(payload)
-        url = data.get('url')
-        if not url:
-             raise ValueError("No URL in payload")
-        
-        # Execute Proxy Request
-        resp = await proxy_service.proxy_request(url, client_ip)
-        
-        if not resp:
-             raise ValueError("Proxy request returned no response")
 
-        # Rewrite HTML if content type is html
-        # Safely access headers
-        headers = getattr(resp, 'headers', {}) or {}
-        content_type = headers.get("content-type", "")
-        
-        # Filter out security headers from proxied response
-        filtered_headers = {}
-        skip_headers = {
-            'content-security-policy', 'content-security-policy-report-only',
-            'x-content-security-policy', 'x-webkit-csp', 'x-frame-options',
-            'x-xss-protection', 'permissions-policy', 'cross-origin-embedder-policy',
-            'cross-origin-opener-policy', 'cross-origin-resource-policy',
-            'strict-transport-security', 'referrer-policy'
-        }
-        for k, v in headers.items():
-            if k.lower() not in skip_headers:
-                filtered_headers[k] = v
-        
-        if "text/html" in content_type:
-            content = await resp.aread()
-            # Log bandwidth for non-streamed content
-            db_utils.log_bandwidth(client_ip, len(content), 0, "proxy")
-            
-            rewritten = proxy_service.rewrite_html(content, url)
-            return Response(content=rewritten, media_type="text/html; charset=utf-8")
-        else:
-            # Stream other content with limit
-            # Prepare clean headers for streaming response
-            stream_headers = {"Content-Disposition": filtered_headers.get("Content-Disposition", "")}
-            return StreamingResponse(
-                proxy_service.stream_response(resp, client_ip, limit_bps),
-                media_type=content_type,
-                headers=stream_headers
-            )
 
-    except HTTPException as he:
-        # Return a friendly HTML error page instead of plain text
-        error_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Proxy Error</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-               background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
-               color: #fff; display: flex; justify-content: center; align-items: center; 
-               min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
-        .error-box {{ background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); 
-                     border-radius: 16px; padding: 40px; max-width: 500px; text-align: center;
-                     box-shadow: 0 8px 32px rgba(0,0,0,0.3); }}
-        h1 {{ color: #ff6b6b; margin-bottom: 20px; }}
-        p {{ color: #ddd; line-height: 1.6; margin-bottom: 25px; }}
-        .status {{ font-size: 48px; font-weight: bold; color: #ff6b6b; margin-bottom: 10px; }}
-        .btn {{ background: #4361ee; color: #fff; padding: 12px 30px; border-radius: 8px; 
-               text-decoration: none; display: inline-block; margin: 5px; transition: all 0.3s; }}
-        .btn:hover {{ background: #3a56d4; transform: translateY(-2px); }}
-        .btn-secondary {{ background: rgba(255,255,255,0.2); }}
-        code {{ background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }}
-    </style>
-</head>
-<body>
-    <div class="error-box">
-        <div class="status">{he.status_code}</div>
-        <h1>Proxy Error</h1>
-        <p>{he.detail}</p>
-        <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
-        <a href="javascript:location.reload()" class="btn">Try Again</a>
-    </div>
-</body>
-</html>"""
-        return Response(content=error_html, status_code=he.status_code, media_type="text/html; charset=utf-8")
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logging.error(f"Proxy failed: {e}\n{error_details}")
-        # Return a friendly HTML error page
-        error_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Proxy Error</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-               background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
-               color: #fff; display: flex; justify-content: center; align-items: center; 
-               min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
-        .error-box {{ background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); 
-                     border-radius: 16px; padding: 40px; max-width: 500px; text-align: center;
-                     box-shadow: 0 8px 32px rgba(0,0,0,0.3); }}
-        h1 {{ color: #ff6b6b; margin-bottom: 20px; }}
-        p {{ color: #ddd; line-height: 1.6; margin-bottom: 25px; }}
-        .status {{ font-size: 48px; font-weight: bold; color: #ff6b6b; margin-bottom: 10px; }}
-        .btn {{ background: #4361ee; color: #fff; padding: 12px 30px; border-radius: 8px; 
-               text-decoration: none; display: inline-block; margin: 5px; transition: all 0.3s; }}
-        .btn:hover {{ background: #3a56d4; transform: translateY(-2px); }}
-        .btn-secondary {{ background: rgba(255,255,255,0.2); }}
-        .details {{ background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; 
-                   margin-top: 20px; text-align: left; font-size: 0.85em; word-break: break-all; }}
-    </style>
-</head>
-<body>
-    <div class="error-box">
-        <div class="status">500</div>
-        <h1>Proxy Internal Error</h1>
-        <p>An unexpected error occurred while processing your request.</p>
-        <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
-        <a href="javascript:location.reload()" class="btn">Try Again</a>
-        <div class="details"><strong>Error:</strong> {str(e)}</div>
-    </div>
-</body>
-</html>"""
-        return Response(content=error_html, status_code=500, media_type="text/html; charset=utf-8")
 
-@app.get("/proxy")
-async def proxy_get_handler(request: Request):
-    """Handle GET requests to /proxy gracefully - these are usually errors from JS redirects"""
-    # If there are query params, it's likely a failed redirect from proxied content
-    if request.query_params:
-        # Return a script that tries to handle navigation issues gracefully
-        return Response(
-            content="""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Redirecting...</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-               background: #0f0f23; color: #ccc; display: flex; justify-content: center;
-               align-items: center; min-height: 100vh; margin: 0; }
-        .box { text-align: center; }
-        .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top: 3px solid #4361ee;
-                   border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
-    <script>
-        // The proxied site tried to navigate - handle gracefully
-        setTimeout(function() {
-            // Try to go back, or reload parent frame, or just close
-            if (window.history.length > 1) {
-                window.history.back();
-            } else if (window.parent && window.parent !== window) {
-                // In iframe - try to reload parent
-                try { window.parent.location.reload(); } catch(e) {}
-            } else {
-                // Nothing worked - just hide the spinner and show done
-                document.querySelector('.spinner').style.display = 'none';
-                document.querySelector('.box').innerHTML = '<p>Navigation completed</p><a href="/" style="color:#4361ee;">Go to Home</a>';
-            }
-        }, 500);
-    </script>
-</head>
-<body>
-    <div class="box">
-        <div class="spinner"></div>
-        <p>Processing...</p>
-    </div>
-</body>
-</html>""",
-            media_type="text/html; charset=utf-8"
-        )
-    return RedirectResponse(url="/")
+
+
+
 
 # --- System Endpoints ---
 
@@ -3034,8 +2874,36 @@ async def quiz_websocket(websocket: WebSocket, room_id: str):
                 })
 
 
+# Determine static directory (handle both script and frozen exe modes)
+if getattr(sys, 'frozen', False):
+    # Running as compiled exe
+    # If onefile, use _MEIPASS. If onedir, use executable dir.
+    # setup_exe.ps1 creates a 'dist' folder structure where exe and static are siblings or static is inside.
+    # Based on the user's workspace structure in setup_exe, static is copied to release/static.
+    # The exe is in release/ (or dist/). 
+    # Let's assume the static folder is in the same directory as the executable.
+    base_path = os.path.dirname(sys.executable)
+    static_path = os.path.join(base_path, "static")
+else:
+    # Running as script
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    static_path = os.path.join(base_path, "static")
+
+if not os.path.exists(static_path):
+    # Fallback to local static if not found (e.g. dev environment mismatch)
+    logging.warning(f"Static directory not found at {static_path}, checking local relative path.")
+    if os.path.exists("static"):
+        static_path = "static"
+    else:
+        logging.error("Static directory not found!")
+
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
+else:
+    # Create dummy static dir to prevent crash
+    os.makedirs("static", exist_ok=True)
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":
     import argparse

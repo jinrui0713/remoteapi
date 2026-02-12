@@ -177,6 +177,18 @@ class InstallerApp(tk.Tk):
                 shutil.rmtree(dst_static)
              shutil.copytree('static', dst_static)
 
+        # Copy src folder (Node.js Proxy)
+        src_node = os.path.join(base_path, 'src')
+        dst_node = os.path.join(target_dir, 'src')
+        if os.path.exists(src_node):
+            if os.path.exists(dst_node):
+                shutil.rmtree(dst_node)
+            shutil.copytree(src_node, dst_node)
+        elif os.path.exists('src'): # Source mode
+             if os.path.exists(dst_node):
+                shutil.rmtree(dst_node)
+             shutil.copytree('src', dst_node)
+
         # 3. Register Scheduled Task
         exe_path = os.path.join(target_dir, "YtDlpApiServer.exe")
         task_name = "YtDlpApiServer"

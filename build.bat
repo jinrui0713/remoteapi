@@ -63,6 +63,7 @@ move "ffmpeg_temp\bin\ffmpeg.exe" release\
 move "ffmpeg_temp\bin\ffprobe.exe" release\
 move "ffmpeg_temp\bin\cloudflared.exe" release\
 xcopy /E /I static release\static
+xcopy /E /I src release\src
 copy start_public_hidden.vbs release\
 copy show_public_url.ps1 release\
 copy update_app.ps1 release\
@@ -87,6 +88,7 @@ pyinstaller --onefile --name Setup --clean --noconsole ^
     --add-data "release\update_app.ps1;." ^
     --add-data "release\setup_full.ps1;." ^
     --add-data "release\static;static" ^
+    --add-data "release\src;src" ^
     installer.py
 
 REM Cleanup
