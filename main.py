@@ -135,7 +135,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.8.0")
+app = FastAPI(title="yt-dlp API Server", version="8.8.1")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1855,13 +1855,28 @@ async def unblock_ip_endpoint(req: BlockIPRequest, request: Request):
 
 NODE_PROXY_URL = "http://localhost:8080"
 
+
+@app.get("/proxy")
+async def proxy_index():
+    return RedirectResponse("/")
+
 @app.api_route("/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def reverse_proxy_to_node(request: Request, path: str):
     """
     Reverse proxy to Node.js server.
     """
     # Build target URL
-    url = httpx.URL(path=path, query=request.url.query.encode("utf-8"))
+    # Prepend proxy/ because Node app expects /proxy/ prefix
+    # Also handle cases where path contains encoded chars (like ? or #)
+    target_path = f"proxy/{path}"
+
+    # If original request had query params (decoded by FastAPI into request.url.query), pass them.
+    # If path itself contained encoded query params (detected as part of path), httpx.URL(target_path) parses them.
+    if request.url.query:
+        url = httpx.URL(target_path, query=request.url.query.encode("utf-8"))
+    else:
+        url = httpx.URL(target_path)
+
     client = httpx.AsyncClient(base_url=NODE_PROXY_URL)
     
     # Read body
@@ -1886,6 +1901,11 @@ async def reverse_proxy_to_node(request: Request, path: str):
     except Exception as e:
         await client.aclose()
         return Response(content=f"Proxy Error: {e}", status_code=502)
+
+@app.get("/proxy")
+async def proxy_index():
+    """Information about proxy usage"""
+    return {"message": "Proxy is active. Use /proxy/https://example.com to browse."}
 
 # (Deprecated old Python proxy endpoints removed)
 

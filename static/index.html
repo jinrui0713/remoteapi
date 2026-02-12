@@ -2279,7 +2279,7 @@
                     }
 
                     // Direct navigation to Node.js proxy
-                    window.open('/proxy/' + target, '_blank');
+                    window.open('/proxy/' + encodeURIComponent(target), '_blank');
 
                     const modal = this.getModal('proxyModal');
                     if (modal) modal.hide();
