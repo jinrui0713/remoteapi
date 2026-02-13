@@ -85,7 +85,7 @@ def start_node_proxy():
         logging.info(f"Starting Node.js Proxy: {server_js}")
         
         env = os.environ.copy()
-        env["PORT"] = "8080"
+        env["PORT"] = "8081"
         env["MAIN_APP_URL"] = "http://localhost:8000" # Update if port is dynamic
         
         NODE_PROCESS = subprocess.Popen(
@@ -135,7 +135,7 @@ sse_handler.setLevel(logging.INFO)
 sse_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(sse_handler)
 
-app = FastAPI(title="yt-dlp API Server", version="8.8.7")
+app = FastAPI(title="yt-dlp API Server", version="8.8.8")
 
 @app.on_event("startup")
 async def startup_event():
@@ -1937,7 +1937,7 @@ async def unblock_ip_endpoint(req: BlockIPRequest, request: Request):
 
 # --- Proxy Endpoints (Node.js Reverse Proxy) ---
 
-NODE_PROXY_URL = "http://localhost:8080"
+NODE_PROXY_URL = "http://localhost:8081"
 
 
 @app.get("/proxy")

@@ -3,6 +3,7 @@ const Unblocker = require('unblocker');
 const { Transform } = require('stream');
 const ytdl = require('@distube/ytdl-core');
 const http = require('http');
+const querystring = require('querystring');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -10,44 +11,32 @@ const MAIN_APP_URL = process.env.MAIN_APP_URL || 'http://localhost:8000';
 const THROTTLE_BPS = 1024 * 1024; // 1 MB/s
 
 // --- Session Verification ---
-const sessionCache = new Map(); // token -> { role: string, expiry: number }
+const sessionCache = new Map();
 
 function checkSession(token) {
     return new Promise((resolve) => {
         if (!token) return resolve(null);
-        
         const cached = sessionCache.get(token);
-        if (cached && cached.expiry > Date.now()) {
-            return resolve(cached.role);
-        }
+        if (cached && cached.expiry > Date.now()) return resolve(cached.role);
 
         const req = http.get(`${MAIN_APP_URL}/api/internal/check_session?token=${token}`, (res) => {
-            if (res.statusCode !== 200) {
-                res.resume();
-                resolve(null);
-                return;
-            }
+            if (res.statusCode !== 200) { res.resume(); resolve(null); return; }
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 try {
                     const json = JSON.parse(data);
-                    // Cache for 60 seconds
                     sessionCache.set(token, { role: json.role, expiry: Date.now() + 60000 });
                     resolve(json.role);
-                } catch(e) {
-                    resolve(null);
-                }
+                } catch(e) { resolve(null); }
             });
         });
-        req.on('error', () => {
-            resolve(null);
-        });
+        req.on('error', () => resolve(null));
         req.end();
     });
 }
 
-// --- Throttle Stream ---
+// --- Video/Throttle Stream ---
 class ThrottleStream extends Transform {
     constructor(bps) {
         super();
@@ -59,9 +48,9 @@ class ThrottleStream extends Transform {
         const len = chunk.length;
         const expectedTimeMs = (len / this.bps) * 1000;
         const timeSinceLast = now - this.lastPush;
+        const delay = (timeSinceLast < expectedTimeMs) ? (expectedTimeMs - timeSinceLast) : 0;
         
-        if (timeSinceLast < expectedTimeMs) {
-            const delay = expectedTimeMs - timeSinceLast;
+        if (delay > 0) {
             setTimeout(() => {
                 this.push(chunk);
                 this.lastPush = Date.now();
@@ -75,29 +64,53 @@ class ThrottleStream extends Transform {
     }
 }
 
+// --- Title Spoofing Script ---
+// Reads from the top frame's localStorage (if same-origin) to get the custom title
+const TITLE_SPOOF_SCRIPT = `
+<script>
+(function(){
+    var targetTitle = "東進学力 POS";
+    try { 
+        if(window.top && window.top.localStorage) {
+            var stored = window.top.localStorage.getItem('spoof_title');
+            if(stored) targetTitle = stored;
+        }
+    } catch(e){}
+
+    function spoof(){ if(document.title !== targetTitle) document.title = targetTitle; }
+    setInterval(spoof, 500);
+    spoof();
+    const observer = new MutationObserver(spoof);
+    if(document.body) observer.observe(document.querySelector('title') || document.body, { subtree: true, characterData: true, childList: true });
+})();
+</script>
+`;
+
 const unblocker = new Unblocker({
     prefix: '/proxy/',
     requestMiddleware: [
-        // YouTube workaround
         async (data) => {
             if (ytdl.validateURL(data.url)) {
-                
                 try {
                     const info = await ytdl.getInfo(data.url);
                     const res = data.clientResponse;
-                    
                     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
                     
-                    const formats = ytdl.filterFormats(info.formats, "audioandvideo");
+                    // Filter formats: prefer audio+video, fallback to any video
+                    let formats = ytdl.filterFormats(info.formats, "audioandvideo");
+                    if (!formats || formats.length === 0) {
+                        formats = ytdl.filterFormats(info.formats, f => f.hasVideo);
+                    }
+                    
                     const thumb = info.videoDetails.thumbnails.pop() || { url: '' };
-
+                    
                     res.end(`
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${info.videoDetails.title}</title>
+<title>Video Player</title>
 <style>
 body { background: #000; color: #fff; margin:0; display:flex; flex-direction:column; align-items:center; min-height:100vh; font-family: sans-serif; }
 video { max-width: 100%; max-height: 80vh; background: #000; }
@@ -107,6 +120,7 @@ p { font-size: 0.9rem; white-space: pre-wrap; color: #ccc; }
 .back { padding: 10px; width: 100%; background: #222; margin-bottom: 20px; }
 .back a { color: #fff; text-decoration: none; margin-left: 20px; }
 </style>
+${TITLE_SPOOF_SCRIPT}
 </head>
 <body>
 <div class="back"><a href="javascript:history.back()">← Back</a></div>
@@ -120,13 +134,10 @@ ${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" sr
 </body>
 </html>
 `);
-                    return true; // Response sent
+                    return true;
                 } catch (err) {
-                    console.error(`Error getting info for ${data.url}`, err);
-                    // Do not return true here, let unblocker try regular proxying? 
-                    // Or return error page. Regular proxying fails for youtube anyway.
-                    data.clientResponse.writeHead(500, { "content-type": "text/plain" });
-                    data.clientResponse.end(`Error retrieving video info: ${err.message}`);
+                    data.clientResponse.writeHead(500, { "content-type": "text/html; charset=utf-8" });
+                    data.clientResponse.end(`<h1>YouTube Error</h1><pre>${err.stack}</pre>`);
                     return true;
                 }
             }
@@ -134,7 +145,7 @@ ${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" sr
     ],
     responseMiddleware: [
         async (data) => {
-            // STRIP CSP HEADERS
+            // Strip CSP
             if (data.headers) {
                 delete data.headers['content-security-policy'];
                 delete data.headers['content-security-policy-report-only'];
@@ -142,17 +153,43 @@ ${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" sr
                 delete data.headers['x-content-security-policy'];
             }
 
-            // Bandwidth Throttling
+            // Inject Title Spoofing
+            if (data.contentType && data.contentType.includes('text/html')) {
+                const decoder = new (require('string_decoder').StringDecoder)('utf8');
+                let buffer = '';
+                const injector = new Transform({
+                    transform(chunk, encoding, callback) {
+                        buffer += decoder.write(chunk);
+                        if (buffer.includes('</head>')) {
+                            const parts = buffer.split('</head>');
+                            // Inject before closing head
+                            this.push(parts[0] + TITLE_SPOOF_SCRIPT + '</head>');
+                            buffer = parts[1];
+                        } 
+                         // Also check body if head is missing or split
+                        if (buffer.length > 1024*64) {
+                            this.push(buffer.slice(0, -100));
+                            buffer = buffer.slice(-100);
+                        }
+                        callback();
+                    },
+                    flush(callback) {
+                        if (buffer) this.push(buffer);
+                        callback();
+                    }
+                });
+                data.stream = data.stream.pipe(injector);
+            }
+
+            // Throttling
             if (data.contentType && (
                 data.contentType.startsWith('video/') || 
                 data.contentType.startsWith('application/octet-stream')
             )) {
                 try {
-                    const userHeaders = data.clientRequest.headers;
-                    const cookie = userHeaders.cookie || '';
+                    const cookie = data.clientRequest.headers.cookie || '';
                     const match = cookie.match(/ytdlp_auth=([^;]+)/);
                     const token = match ? match[1] : null;
-                    
                     const role = await checkSession(token);
                     if (role !== 'admin') {
                         data.stream = data.stream.pipe(new ThrottleStream(THROTTLE_BPS));
@@ -165,6 +202,38 @@ ${formats.map(format => `<source type="${format.mimeType.split(";").shift()}" sr
     ]
 });
 
+// Middleware for parsing POST body for proxy gateway
+app.use((req, res, next) => {
+    if (req.method === 'POST' && req.path === '/proxy_gateway') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            req.body = querystring.parse(body);
+            next();
+        });
+    } else {
+        next();
+    }
+});
+
+// Gateway to hide parsed URL from initial history
+app.post('/proxy_gateway', (req, res, next) => {
+    let target = req.body.url;
+    if (!target) return res.redirect('/');
+    
+    // Normalize logic
+    if (!target.startsWith('http')) {
+         // Naive check
+         if (!target.includes('://')) target = 'https://' + target;
+    }
+
+    // Trick unblocker: fake the URL and method logic
+    req.url = '/proxy/' + target;
+    req.method = 'GET'; // Convert POST navigation to GET proxy request
+    
+    next();
+});
+
 app.use(unblocker);
 
 app.get('/', (req, res) => {
@@ -174,23 +243,19 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Browser</title>
+    <title>東進学力 POS</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #202124; color: #e8eaed; }
-        #nav-bar { height: 50px; background: #292a2d; display: flex; align-items: center; padding: 0 10px; border-bottom: 1px solid #3c4043; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-        .nav-btn { background: transparent; border: none; color: #9aa0a6; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; font-size: 16px; }
-        .nav-btn:hover { background: rgba(255,255,255,0.1); color: #e8eaed; }
-        .nav-btn:active { background: rgba(255,255,255,0.2); }
-        .url-bar-container { flex: 1; position: relative; display: flex; align-items: center; }
-        #url-input { width: 100%; background: #202124; border: 1px solid #5f6368; border-radius: 20px; color: #e8eaed; padding: 6px 15px; font-size: 14px; outline: none; transition: border 0.2s, background 0.2s; height: 34px; box-sizing: border-box; }
-        #url-input:focus { border-color: #8ab4f8; background: #292a2d; }
-        #iframe-container { width: 100%; height: calc(100% - 50px); position: relative; }
-        iframe { width: 100%; height: 100%; border: none; background: #fff; }
-        .menu-dropdown { position: absolute; top: 45px; right: 10px; width: 250px; background: #292a2d; border: 1px solid #3c4043; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); display: none; z-index: 1000; overflow: hidden; padding: 5px 0; }
-        .menu-item { padding: 8px 15px; cursor: pointer; display: flex; align-items: center; color: #e8eaed; font-size: 14px; }
-        .menu-item:hover { background: rgba(255,255,255,0.1); }
-        .loader { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #8ab4f8, #c58af9); animation: load 1s infinite linear; display: none; }
-        @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; background: #f0f2f5; color: #333; }
+        #nav-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #ddd; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .nav-btn { background: transparent; border: none; color: #5f6368; border-radius: 4px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; font-size: 18px; }
+        .nav-btn:hover { background: #f0f0f0; color: #202124; }
+        #url-input { flex: 1; background: #f1f3f4; border: 1px solid transparent; border-radius: 20px; padding: 8px 16px; font-size: 14px; outline: none; transition: 0.2s; }
+        #url-input:focus { background: #fff; border-color: #1a73e8; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        #iframe-container { width: 100%; height: calc(100% - 50px); position: relative; background: #fff; }
+        iframe { width: 100%; height: 100%; border: none; }
+        .menu-dropdown { position: absolute; top: 55px; right: 10px; width: 260px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; z-index: 2000; max-height: 400px; overflow-y: auto; }
+        .menu-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; color: #333; }
+        .menu-item:hover { background: #f8f9fa; }
     </style>
 </head>
 <body>
@@ -199,14 +264,19 @@ app.get('/', (req, res) => {
         <button class="nav-btn" onclick="goForward()" title="進む">→</button>
         <button class="nav-btn" onclick="reload()" title="再読み込み">↻</button>
         <button class="nav-btn" onclick="goHome()" title="ホーム">🏠</button>
-        <div class="url-bar-container">
-            <input type="text" id="url-input" placeholder="検索またはURLを入力" onkeydown="handleKey(event)">
-        </div>
+        
+        <!-- Hidden Form for POST Navigation -->
+        <form id="proxy-form" method="POST" action="/proxy_gateway" target="content-frame" style="display:none;">
+            <input type="hidden" name="url" id="proxy-input-hidden">
+        </form>
+
+        <input type="text" id="url-input" placeholder="検索またはURLを入力 (Enterで移動)" onkeydown="handleKey(event)">
+        
+        <button class="nav-btn" onclick="openSettings()" title="タブ名などの設定">⚙️</button>
         <button class="nav-btn" onclick="toggleHistory()" title="履歴">🕒</button>
     </div>
     
     <div id="iframe-container">
-        <div class="loader" id="loader"></div>
         <iframe id="content-frame" name="content-frame" sandbox="allow-forms allow-scripts allow-top-navigation allow-same-origin allow-popups allow-modals allow-downloads"></iframe>
     </div>
 
@@ -215,11 +285,34 @@ app.get('/', (req, res) => {
     <script>
         const frame = document.getElementById('content-frame');
         const input = document.getElementById('url-input');
-        const loader = document.getElementById('loader');
+        const proxyForm = document.getElementById('proxy-form');
+        const proxyInputHidden = document.getElementById('proxy-input-hidden');
         const historyMenu = document.getElementById('history-menu');
         const MAIN_APP = "${MAIN_APP_URL}";
 
         let historyLog = JSON.parse(localStorage.getItem('proxy_history') || '[]');
+
+        function initTitle() {
+            var t = localStorage.getItem('spoof_title');
+            if(t) document.title = t;
+        }
+        initTitle();
+
+        function openSettings() {
+            var current = localStorage.getItem('spoof_title') || document.title;
+            var newVal = prompt("プロキシ中のタブタイトルを入力してください（空白でデフォルト）:", current === "東進学力 POS" ? "" : current);
+            if(newVal !== null) {
+                if(!newVal.trim()) {
+                    localStorage.removeItem('spoof_title');
+                    document.title = "東進学力 POS";
+                } else {
+                    localStorage.setItem('spoof_title', newVal);
+                    document.title = newVal;
+                }
+                // Reload iframe so injected script picks up new title
+                if(frame.contentWindow) try { frame.contentWindow.location.reload(); } catch(e){}
+            }
+        }
 
         function saveHistory(url) {
             if (!url) return;
@@ -229,55 +322,49 @@ app.get('/', (req, res) => {
             localStorage.setItem('proxy_history', JSON.stringify(historyLog));
         }
 
-        function loadHistoryUI() {
-            historyMenu.innerHTML = '';
-            if (historyLog.length === 0) {
-                historyMenu.innerHTML = '<div class="menu-item" style="cursor:default; color:#888;">履歴なし</div>';
+        function toggleHistory() {
+            if (historyMenu.style.display === 'block') {
+                historyMenu.style.display = 'none';
                 return;
             }
-            historyLog.forEach(url => {
-                const div = document.createElement('div');
-                div.className = 'menu-item';
-                div.textContent = url;
-                div.onclick = () => { navigate(url); toggleHistory(); };
-                historyMenu.appendChild(div);
-            });
-            const clearBtn = document.createElement('div');
-            clearBtn.className = 'menu-item';
-            clearBtn.style.borderTop = '1px solid #444';
-            clearBtn.style.color = '#f88';
-            clearBtn.textContent = '履歴を消去';
-            clearBtn.onclick = () => { localStorage.removeItem('proxy_history'); historyLog = []; loadHistoryUI(); };
-            historyMenu.appendChild(clearBtn);
-        }
-
-        function toggleHistory() {
-            historyMenu.style.display = (historyMenu.style.display === 'block') ? 'none' : 'block';
-            if(historyMenu.style.display === 'block') loadHistoryUI();
-        }
-        
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('#history-menu') && !e.target.closest('.nav-btn[title="履歴"]')) {
-                historyMenu.style.display = 'none';
+            historyMenu.innerHTML = '';
+            if (historyLog.length === 0) {
+                historyMenu.innerHTML = '<div class="menu-item" style="color:#999">履歴なし</div>';
+            } else {
+                historyLog.forEach(url => {
+                    const item = document.createElement('div');
+                    item.className = 'menu-item';
+                    item.textContent = url;
+                    item.onclick = () => { navigate(url); toggleHistory(); };
+                    historyMenu.appendChild(item);
+                });
+                const clear = document.createElement('div');
+                clear.className = 'menu-item';
+                clear.textContent = '履歴を消去';
+                clear.style.color = 'red';
+                clear.onclick = () => { localStorage.removeItem('proxy_history'); historyLog = []; toggleHistory(); };
+                historyMenu.appendChild(clear);
             }
-        });
+            historyMenu.style.display = 'block';
+        }
 
         function navigate(url) {
             if (!url) return;
             let target = url.trim();
             if (!target.match(/^https?:\\/\\//i)) {
-                if (target.includes('.') && !target.includes(' ')) {
-                    target = 'https://' + target;
-                } else {
-                    target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
-                }
+                 if (!target.includes(' ') && target.includes('.')) {
+                     target = 'https://' + target;
+                 } else {
+                     target = 'https://www.google.com/search?q=' + encodeURIComponent(target);
+                 }
             }
+            
             saveHistory(target);
-            loader.style.display = 'block';
-            input.value = target;
-            frame.src = '/proxy/' + target;
-            // Clean URL bar query to satisfy user constraint
-            window.history.replaceState(null, '', '/');
+            input.value = target; 
+            
+            // POST Submit to hide from URL history
+            proxyInputHidden.value = target;
+            proxyForm.submit();
         }
 
         function handleKey(e) {
@@ -289,20 +376,7 @@ app.get('/', (req, res) => {
         function reload() { frame.contentWindow.location.reload(); }
         function goHome() { window.location.href = MAIN_APP; }
 
-        frame.onload = () => {
-            loader.style.display = 'none';
-            try {
-                const href = frame.contentWindow.location.href;
-                if (href.includes('/proxy/')) {
-                    let clean = href;
-                    const idx = href.indexOf('/proxy/');
-                    if (idx !== -1) clean = href.substring(idx + 7);
-                    input.value = clean;
-                    saveHistory(clean);
-                }
-            } catch (e) {}
-        };
-
+        // Initial Load
         const params = new URLSearchParams(window.location.search);
         if (params.get('url')) {
             navigate(params.get('url'));
@@ -313,7 +387,7 @@ app.get('/', (req, res) => {
     </script>
 </body>
 </html>
-    `);
+`);
 });
 
 app.listen(PORT, () => {
